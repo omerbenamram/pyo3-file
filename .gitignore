@@ -1,2 +1,4 @@
-/target
+**/target
+**/*.egg-info
 **/*.rs.bk
+**/*.so

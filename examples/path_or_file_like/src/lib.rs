@@ -1,19 +1,10 @@
-# PyO3-File
-
-This a small utility library to facilitate working with python file-like with rust.
-
-## Example
-
-```rust
-#![warn(unused_imports)]
-
-use pyo3_file::PyFileLikeObject;
 use pyo3::types::PyString;
+use pyo3_file::PyFileLikeObject;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use std::io::Read;
 use std::fs::File;
+use std::io::Read;
 
 /// Represents either a path `File` or a file-like object `FileLike`
 #[derive(Debug)]
@@ -79,20 +70,4 @@ fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-
-# fn main() {}
-```
-
-and use from python:
-
-```python
-from example_module import accepts_path_or_file_like
-
-def main():
-    # works
-    accepts_path_or_file_like("./some_file.txt")
-    
-    # also works
-    f = open('./some_file.txt')
-    accepts_path_or_file_like(f)
-```
+fn main() {}
