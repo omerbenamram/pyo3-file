@@ -5,8 +5,6 @@ This a small utility library to facilitate working with python file-like with ru
 ## Example
 
 ```rust
-#![warn(unused_imports)]
-
 use pyo3_file::PyFileLikeObject;
 use pyo3::types::PyString;
 
@@ -86,7 +84,7 @@ fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
 and use from python:
 
 ```python
-from example_module import accepts_path_or_file_like
+from path_or_file_like import accepts_path_or_file_like
 
 def main():
     # works
