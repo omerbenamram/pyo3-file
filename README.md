@@ -4,6 +4,25 @@ This is a small utility library to facilitate working with python file-like obje
 
 ## Example
 
+An example use case for this is when a file is opened in python, and needs to be passed to a rust library.
+
+We could support both by introspecting the `PyObject`, and picking the correct behavior.
+
+We would like this to work
+```python
+from path_or_file_like import accepts_path_or_file_like
+
+def main():
+    # should open `some_file.txt`.
+    accepts_path_or_file_like("./some_file.txt")
+    
+    # should read from the python handle.
+    f = open('./some_file.txt')
+    accepts_path_or_file_like(f)
+```
+
+We could use `pyo3_file` to extend an existing a `pyo3` module.
+
 ```rust
 use pyo3_file::PyFileLikeObject;
 use pyo3::types::PyString;
@@ -79,18 +98,4 @@ fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
 
 
 # fn main() {}
-```
-
-and use from python:
-
-```python
-from path_or_file_like import accepts_path_or_file_like
-
-def main():
-    # works
-    accepts_path_or_file_like("./some_file.txt")
-    
-    # also works
-    f = open('./some_file.txt')
-    accepts_path_or_file_like(f)
 ```
