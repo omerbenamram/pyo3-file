@@ -172,7 +172,7 @@ name = "path_or_file_like"
 version = "0.1.0"
 dependencies = [
  "pyo3 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pyo3-file 0.1.0",
+ "pyo3-file 0.2.0",
 ]
 
 [[package]]
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-file"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pyo3 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "skeptic 0.13.4 (registry+https://github.com/rust-lang/crates.io-index)",
