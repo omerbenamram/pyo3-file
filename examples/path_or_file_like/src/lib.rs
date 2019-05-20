@@ -26,18 +26,16 @@ impl FileOrFileLike {
         }
 
         // is a file-like
-        match PyFileLikeObject::new(path_or_file_like) {
+        match PyFileLikeObject::with_requirements(path_or_file_like, true, false, true) {
             Ok(f) => Ok(FileOrFileLike::FileLike(f)),
-            Err(e) => Err(e),
+            Err(e) => Err(e)
         }
     }
 }
 
 #[pyfunction]
 /// Opens a file or file-like, and reads it to string.
-fn accepts_path_or_file_like(
-    path_or_file_like: PyObject,
-) -> PyResult<Py<PyString>> {
+fn accepts_path_or_file_like(path_or_file_like: PyObject) -> PyResult<Py<PyString>> {
     let gil = Python::acquire_gil();
     let py = gil.python();
 

@@ -32,22 +32,28 @@ impl PyFileLikeObject {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        if let Err(_) = object.getattr(py, "read") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .read() method.",
-            ));
+        if read {
+            if let Err(_) = object.getattr(py, "read") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .read() method.",
+                ));
+            }
         }
 
-        if let Err(_) = object.getattr(py, "seek") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .seek() method.",
-            ));
+        if seek {
+            if let Err(_) = object.getattr(py, "seek") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .seek() method.",
+                ));
+            }
         }
 
-        if let Err(_) = object.getattr(py, "write") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .write() method.",
-            ));
+        if write {
+            if let Err(_) = object.getattr(py, "write") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .write() method.",
+                ));
+            }
         }
 
         Ok(PyFileLikeObject::new(object))
