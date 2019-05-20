@@ -4,6 +4,7 @@ from pathlib import Path
 
 from path_or_file_like import accepts_path_or_file_like
 
+
 @pytest.fixture
 def small_sample() -> str:
     p = Path(__file__).parent.parent
@@ -19,7 +20,7 @@ def test_it_works_on_io_object(small_sample):
 
 def test_it_works_on_file_backed_object(small_sample):
     with open(small_sample, "rb") as o:
-        assert accepts_path_or_file_like(io.BytesIO(o.read())) == "Hello World!"
+        assert accepts_path_or_file_like(o) == "Hello World!"
 
 
 def test_it_fails_on_non_file_object():
