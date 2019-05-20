@@ -6,9 +6,9 @@ This is a small utility library to facilitate working with python file-like obje
 
 An example use case for this is when a file is opened in python, and needs to be passed to a rust library.
 
-We could support both by introspecting the `PyObject`, and picking the correct behavior.
+We could support both by introspecting the `PyObject`, and pick the correct behavior.
 
-We would like this to work
+We would like this to work:
 ```python
 from path_or_file_like import accepts_path_or_file_like
 
