@@ -1,6 +1,6 @@
 # PyO3-File
 
-This is a small utility library to facilitate working with python file-like with rust.
+This is a small utility library to facilitate working with python file-like objects with rust.
 
 ## Example
 
