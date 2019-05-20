@@ -1,8 +1,20 @@
 [package]
 name = "pyo3-file"
+description = "A small helper library for working with python file-like objects with rust"
+homepage = "https://github.com/omerbenamram/pyo3-file"
+repository = "https://github.com/omerbenamram/pyo3-file"
+license = "MIT/Apache-2.0"
+readme = "README.md"
+
 version = "0.1.0"
 authors = ["Omer Ben-Amram <omerbenamram@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 pyo3 = "0.6.0"
+
+[dev-dependencies]
+skeptic = "0.13"
+
+[build-dependencies]
+skeptic = "0.13"

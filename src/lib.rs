@@ -1,14 +1,8 @@
-use pyo3::exceptions::{IOError, NotImplementedError, OSError, RuntimeError, ValueError};
 use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
-use pyo3::types::{PyAny, PyBytes, PyDict};
-use pyo3::wrap_pyfunction;
-use pyo3::AsPyPointer;
-use pyo3::PyIterProtocol;
 
-use core::borrow::{Borrow, BorrowMut};
-use std::convert::TryInto;
-use std::fs::File;
+use pyo3::types::{PyBytes};
+use pyo3::exceptions::TypeError;
+
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
 
@@ -17,12 +11,38 @@ pub struct PyFileLikeObject {
     inner: PyObject,
 }
 
+/// Wraps a `PyObject`, and implements read, seek, and write for it.
+/// Expects the object to represent a python `file-like` object.
+///
+/// Will return a `TypeError` if object does not have `read`, `seek`, and `write` methods.
 impl PyFileLikeObject {
-    pub fn new(inner: PyObject) -> Self {
-        Self { inner }
+    pub fn new(object: PyObject) -> PyResult<Self> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        if let Err(_) = object.getattr(py, "read") {
+            return Err(PyErr::new::<TypeError, _>(
+                "Object does not have a .read() method.",
+            ))
+        }
+
+        if let Err(_) = object.getattr(py, "seek") {
+            return Err(PyErr::new::<TypeError, _>(
+                "Object does not have a .seek() method.",
+            ))
+        }
+
+        if let Err(_) = object.getattr(py, "write") {
+            return Err(PyErr::new::<TypeError, _>(
+                "Object does not have a .write() method.",
+            ))
+        }
+
+        Ok(PyFileLikeObject { inner: object })
     }
 }
 
+/// Extracts a string repr from, and returns an IO error to send back to rust.
 fn pyerr_to_io_err(e: PyErr) -> io::Error {
     let gil = Python::acquire_gil();
     let py = gil.python();
@@ -30,7 +50,7 @@ fn pyerr_to_io_err(e: PyErr) -> io::Error {
     match e.into_object(py).call_method(py, "__str__", (), None) {
         Ok(repr) => match repr.extract::<String>(py) {
             Ok(s) => io::Error::new(io::ErrorKind::Other, s),
-            Err(e) => io::Error::new(io::ErrorKind::Other, "An unknown error has occurred"),
+            Err(_e) => io::Error::new(io::ErrorKind::Other, "An unknown error has occurred"),
         },
         Err(_) => io::Error::new(io::ErrorKind::Other, "Err doesn't have __str__"),
     }
@@ -98,7 +118,7 @@ impl Seek for PyFileLikeObject {
             .inner
             .call_method(py, "seek", (offset, whence), None)
             .map_err(pyerr_to_io_err)?;
-        
+
         Ok(new_position.extract(py).map_err(pyerr_to_io_err)?)
     }
 }
