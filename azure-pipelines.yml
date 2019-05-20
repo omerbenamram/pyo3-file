@@ -1,0 +1,120 @@
+trigger:
+  branches:
+    include: ['*']
+  tags:
+    include: ['*']
+
+jobs:
+  - job:
+    displayName: manylinux
+    pool:
+      vmImage: 'ubuntu-16.04'
+
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.6'
+          architecture: 'x64'
+
+      - script: |
+          python -m pip install --upgrade pip setuptools wheel
+        displayName: 'Install pyo3-pack'
+
+      - script: |
+          docker run -v $(Build.SourcesDirectory):/io konstin2/pyo3-pack build
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: "Build wheels"
+
+
+      - script: |
+          pip install $(Build.SourcesDirectory)/examples/path_or_file_like/target/wheels/evtx-*-cp36-*.whl
+        displayName: 'Install new wheel'
+
+      - script: |
+          pip install pytest pytest-azurepipelines
+          pytest
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: 'pytest'
+
+
+  - job:
+    displayName: macOS-10.13
+
+    pool:
+      vmImage: 'macOS-10.13'
+
+    steps:
+      - script: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+          echo "##vso[task.setvariable variable=PATH;]$PATH:$HOME/.cargo/bin"
+        displayName: "Install rust"
+
+      - bash: |
+          cargo install pyo3-pack
+        displayName: "Install PyO3-pack"
+
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.6'
+          architecture: 'x64'
+
+      - script: |
+          python -m pip install --upgrade pip setuptools wheel
+        displayName: 'Install pyo3-pack'
+
+      - script: |
+          pyo3-pack build -o $(Build.BinariesDirectory)
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: 'PyO3-pack build'
+
+      - script: |
+          pip install $(Build.BinariesDirectory)/evtx-*-cp36-*.whl
+        displayName: 'Install new wheel'
+
+      - script: |
+          pip install pytest pytest-azurepipelines
+          pytest
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: 'pytest'
+
+
+  - job:
+    displayName: Windows
+
+    pool:
+      vmImage: 'vs2017-win2016'
+
+    steps:
+      - script: |
+          curl -sSf -o rustup-init.exe https://win.rustup.rs
+          rustup-init.exe -y --default-toolchain nightly
+          echo "##vso[task.setvariable variable=PATH;]%PATH%;%USERPROFILE%\.cargo\bin"
+        displayName: Install rust
+
+      - script: |
+          cargo install pyo3-pack
+        displayName: "Install PyO3-pack"
+
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.6'
+          architecture: 'x64'
+
+      - script: |
+          python -m pip install --upgrade pip setuptools wheel
+        displayName: 'Install pyo3-pack'
+
+      - script: |
+          pyo3-pack build -o $(Build.BinariesDirectory)
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: 'PyO3-pack build'
+
+      - powershell: |
+          pip install $(Build.BinariesDirectory)/$(Get-ChildItem $(Build.BinariesDirectory)/evtx-*-cp36-*.whl | Select -exp Name)
+        displayName: 'Install new wheel'
+
+      - script: |
+          pip install pytest pytest-azurepipelines
+          pytest
+        workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
+        displayName: 'pytest'
