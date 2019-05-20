@@ -1,3 +1,6 @@
+[![Build Status](https://dev.azure.com/benamram/evtx/_apis/build/status/omerbenamram.pyo3-file?branchName=master)](https://dev.azure.com/benamram/evtx/_build/latest?definitionId=3&branchName=master)
+![crates.io](https://img.shields.io/crates/v/pyo3-file.svg)
+
 # PyO3-File
 
 This is a small utility library to facilitate working with python file-like objects with rust.
