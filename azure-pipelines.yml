@@ -21,13 +21,13 @@ jobs:
         displayName: 'Install pyo3-pack'
 
       - script: |
-          docker run -v $(Build.SourcesDirectory):/io konstin2/pyo3-pack build
+          docker run -v $(Build.SourcesDirectory)/examples/path_or_file_like:/io konstin2/pyo3-pack build
         workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
         displayName: "Build wheels"
 
 
       - script: |
-          pip install $(Build.SourcesDirectory)/examples/path_or_file_like/target/wheels/evtx-*-cp36-*.whl
+          pip install $(Build.SourcesDirectory)/examples/path_or_file_like/target/wheels/path_or_file_like-*-cp36-*.whl
         displayName: 'Install new wheel'
 
       - script: |
@@ -68,7 +68,7 @@ jobs:
         displayName: 'PyO3-pack build'
 
       - script: |
-          pip install $(Build.BinariesDirectory)/evtx-*-cp36-*.whl
+          pip install $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl
         displayName: 'Install new wheel'
 
       - script: |
@@ -110,7 +110,7 @@ jobs:
         displayName: 'PyO3-pack build'
 
       - powershell: |
-          pip install $(Build.BinariesDirectory)/$(Get-ChildItem $(Build.BinariesDirectory)/evtx-*-cp36-*.whl | Select -exp Name)
+          pip install $(Build.BinariesDirectory)/$(Get-ChildItem $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl | Select -exp Name)
         displayName: 'Install new wheel'
 
       - script: |
