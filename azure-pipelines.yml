@@ -11,6 +11,15 @@ jobs:
       vmImage: 'ubuntu-16.04'
 
     steps:
+      - script: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+          echo "##vso[task.setvariable variable=PATH;]$PATH:$HOME/.cargo/bin"
+        displayName: "Install rust"
+
+      - bash: |
+          cargo install pyo3-pack
+        displayName: "Install PyO3-pack"
+
       - task: UsePythonVersion@0
         inputs:
           versionSpec: '3.6'
@@ -18,16 +27,15 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip setuptools wheel
-        displayName: 'Install pyo3-pack'
+        displayName: 'Update pip'
 
       - script: |
-          docker run -v $(Build.SourcesDirectory)/examples/path_or_file_like:/io konstin2/pyo3-pack build
+          pyo3-pack build -o $(Build.BinariesDirectory)
         workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
-        displayName: "Build wheels"
-
+        displayName: 'PyO3-pack build'
 
       - script: |
-          pip install $(Build.SourcesDirectory)/examples/path_or_file_like/target/wheels/path_or_file_like-*-cp36-*.whl
+          pip install $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl
         displayName: 'Install new wheel'
 
       - script: |
@@ -60,7 +68,7 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip setuptools wheel
-        displayName: 'Install pyo3-pack'
+        displayName: 'Update Pip'
 
       - script: |
           pyo3-pack build -o $(Build.BinariesDirectory)
