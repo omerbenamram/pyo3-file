@@ -94,13 +94,11 @@ impl Seek for PyFileLikeObject {
             SeekFrom::End(i) => (2, i as i64),
         };
 
-        dbg!("try_seek", offset, whence);
         let new_position = self
             .inner
             .call_method(py, "seek", (offset, whence), None)
             .map_err(pyerr_to_io_err)?;
-
-        dbg!(new_position.extract::<u64>(py).unwrap());
+        
         Ok(new_position.extract(py).map_err(pyerr_to_io_err)?)
     }
 }
