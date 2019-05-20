@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
-use pyo3::types::{PyBytes};
 use pyo3::exceptions::TypeError;
+use pyo3::types::PyBytes;
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -12,33 +12,51 @@ pub struct PyFileLikeObject {
 }
 
 /// Wraps a `PyObject`, and implements read, seek, and write for it.
-/// Expects the object to represent a python `file-like` object.
-///
-/// Will return a `TypeError` if object does not have `read`, `seek`, and `write` methods.
 impl PyFileLikeObject {
-    pub fn new(object: PyObject) -> PyResult<Self> {
+    /// Creates an instance of a `PyFileLikeObject` from a `PyObject`.
+    /// To assert the object has the required methods methods,
+    /// instantiate it with `PyFileLikeObject::require`
+    pub fn new(object: PyObject) -> Self {
+        PyFileLikeObject { inner: object }
+    }
+
+    /// Same as `PyFileLikeObject::new`, but validates that the underlying
+    /// python object has a `read`, `write`, and `seek` methods in respect to parameters.
+    /// Will return a `TypeError` if object does not have `read`, `seek`, and `write` methods.
+    pub fn with_requirements(
+        object: PyObject,
+        read: bool,
+        write: bool,
+        seek: bool,
+    ) -> PyResult<Self> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        if let Err(_) = object.getattr(py, "read") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .read() method.",
-            ))
+        if read {
+            if let Err(_) = object.getattr(py, "read") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .read() method.",
+                ));
+            }
         }
 
-        if let Err(_) = object.getattr(py, "seek") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .seek() method.",
-            ))
+        if seek {
+            if let Err(_) = object.getattr(py, "seek") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .seek() method.",
+                ));
+            }
         }
 
-        if let Err(_) = object.getattr(py, "write") {
-            return Err(PyErr::new::<TypeError, _>(
-                "Object does not have a .write() method.",
-            ))
+        if write {
+            if let Err(_) = object.getattr(py, "write") {
+                return Err(PyErr::new::<TypeError, _>(
+                    "Object does not have a .write() method.",
+                ));
+            }
         }
 
-        Ok(PyFileLikeObject { inner: object })
+        Ok(PyFileLikeObject::new(object))
     }
 }
 

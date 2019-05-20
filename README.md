@@ -52,9 +52,9 @@ impl FileOrFileLike {
         }
 
         // is a file-like
-        match PyFileLikeObject::new(path_or_file_like) {
+        match PyFileLikeObject::with_requirements(path_or_file_like, true, false, true) {
             Ok(f) => Ok(FileOrFileLike::FileLike(f)),
-            Err(e) => Err(e),
+            Err(e) => Err(e)
         }
     }
 }
