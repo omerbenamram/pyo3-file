@@ -17,8 +17,8 @@ jobs:
         displayName: "Install rust"
 
       - bash: |
-          cargo install pyo3-pack
-        displayName: "Install PyO3-pack"
+          cargo install maturin
+        displayName: "Install maturin"
 
       - task: UsePythonVersion@0
         inputs:
@@ -30,9 +30,9 @@ jobs:
         displayName: 'Update pip'
 
       - script: |
-          pyo3-pack build -o $(Build.BinariesDirectory)
+          maturin build -o $(Build.BinariesDirectory)
         workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
-        displayName: 'PyO3-pack build'
+        displayName: 'maturin build'
 
       - script: |
           pip install $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl
@@ -58,8 +58,8 @@ jobs:
         displayName: "Install rust"
 
       - bash: |
-          cargo install pyo3-pack
-        displayName: "Install PyO3-pack"
+          cargo install maturin
+        displayName: "Install maturin"
 
       - task: UsePythonVersion@0
         inputs:
@@ -71,9 +71,9 @@ jobs:
         displayName: 'Update Pip'
 
       - script: |
-          pyo3-pack build -o $(Build.BinariesDirectory)
+          maturin build -o $(Build.BinariesDirectory)
         workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
-        displayName: 'PyO3-pack build'
+        displayName: 'maturin build'
 
       - script: |
           pip install $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl
@@ -100,8 +100,8 @@ jobs:
         displayName: Install rust
 
       - script: |
-          cargo install pyo3-pack
-        displayName: "Install PyO3-pack"
+          cargo install maturin
+        displayName: "Install maturin"
 
       - task: UsePythonVersion@0
         inputs:
@@ -110,12 +110,12 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip setuptools wheel
-        displayName: 'Install pyo3-pack'
+        displayName: 'Install maturin'
 
       - script: |
-          pyo3-pack build -o $(Build.BinariesDirectory)
+          maturin build -o $(Build.BinariesDirectory)
         workingDirectory: "$(Build.SourcesDirectory)/examples/path_or_file_like"
-        displayName: 'PyO3-pack build'
+        displayName: 'maturin build'
 
       - powershell: |
           pip install $(Build.BinariesDirectory)/$(Get-ChildItem $(Build.BinariesDirectory)/path_or_file_like-*-cp36-*.whl | Select -exp Name)

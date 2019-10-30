@@ -64,8 +64,9 @@ impl PyFileLikeObject {
 fn pyerr_to_io_err(e: PyErr) -> io::Error {
     let gil = Python::acquire_gil();
     let py = gil.python();
+    let e_as_object: PyObject = e.into_py(py);
 
-    match e.into_object(py).call_method(py, "__str__", (), None) {
+    match e_as_object.call_method(py, "__str__", (), None) {
         Ok(repr) => match repr.extract::<String>(py) {
             Ok(s) => io::Error::new(io::ErrorKind::Other, s),
             Err(_e) => io::Error::new(io::ErrorKind::Other, "An unknown error has occurred"),
@@ -99,7 +100,7 @@ impl Write for PyFileLikeObject {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let pybytes = PyBytes::new(py, buf).into_object(py);
+        let pybytes = PyBytes::new(py, buf);
 
         let number_bytes_written = self
             .inner

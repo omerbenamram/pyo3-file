@@ -2,3 +2,4 @@
 **/*.egg-info
 **/*.rs.bk
 **/*.so
+.idea

@@ -1,10 +1,11 @@
-use pyo3::types::PyString;
 use pyo3_file::PyFileLikeObject;
+use pyo3::types::PyString;
+use pyo3::derive_utils::IntoPyResult;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use std::fs::File;
 use std::io::Read;
+use std::fs::File;
 
 /// Represents either a path `File` or a file-like object `FileLike`
 #[derive(Debug)]
@@ -35,7 +36,9 @@ impl FileOrFileLike {
 
 #[pyfunction]
 /// Opens a file or file-like, and reads it to string.
-fn accepts_path_or_file_like(path_or_file_like: PyObject) -> PyResult<Py<PyString>> {
+fn accepts_path_or_file_like(
+    path_or_file_like: PyObject,
+) -> PyResult<String> {
     let gil = Python::acquire_gil();
     let py = gil.python();
 
@@ -47,14 +50,14 @@ fn accepts_path_or_file_like(path_or_file_like: PyObject) -> PyResult<Py<PyStrin
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                Ok(PyString::new(py, &string))
+                string.into_py_result()
             }
             FileOrFileLike::FileLike(mut f) => {
                 println!("Its a file-like object");
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                Ok(PyString::new(py, &string))
+                string.into_py_result()
             }
         },
         Err(e) => Err(e),
