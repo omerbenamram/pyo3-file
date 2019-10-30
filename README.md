@@ -29,6 +29,7 @@ We could use `pyo3_file` to extend an existing a `pyo3` module.
 ```rust
 use pyo3_file::PyFileLikeObject;
 use pyo3::types::PyString;
+use pyo3::derive_utils::IntoPyResult;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -66,7 +67,7 @@ impl FileOrFileLike {
 /// Opens a file or file-like, and reads it to string.
 fn accepts_path_or_file_like(
     path_or_file_like: PyObject,
-) -> PyResult<Py<PyString>> {
+) -> PyResult<String> {
     let gil = Python::acquire_gil();
     let py = gil.python();
 
@@ -78,14 +79,14 @@ fn accepts_path_or_file_like(
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                Ok(PyString::new(py, &string))
+                string.into_py_result()
             }
             FileOrFileLike::FileLike(mut f) => {
                 println!("Its a file-like object");
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                Ok(PyString::new(py, &string))
+                string.into_py_result()
             }
         },
         Err(e) => Err(e),
