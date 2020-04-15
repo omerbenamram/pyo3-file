@@ -11,7 +11,7 @@ authors = ["Omer Ben-Amram <omerbenamram@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-pyo3 = "0.9.0-alpha.1"
+pyo3 = "0.9.2"
 
 [dev-dependencies]
 skeptic = "0.13"
