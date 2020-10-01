@@ -1,6 +1,5 @@
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyTypeError, prelude::*};
 
-use pyo3::exceptions::TypeError;
 use pyo3::types::PyBytes;
 
 use std::io;
@@ -34,7 +33,7 @@ impl PyFileLikeObject {
 
         if read {
             if let Err(_) = object.getattr(py, "read") {
-                return Err(PyErr::new::<TypeError, _>(
+                return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .read() method.",
                 ));
             }
@@ -42,7 +41,7 @@ impl PyFileLikeObject {
 
         if seek {
             if let Err(_) = object.getattr(py, "seek") {
-                return Err(PyErr::new::<TypeError, _>(
+                return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .seek() method.",
                 ));
             }
@@ -50,7 +49,7 @@ impl PyFileLikeObject {
 
         if write {
             if let Err(_) = object.getattr(py, "write") {
-                return Err(PyErr::new::<TypeError, _>(
+                return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .write() method.",
                 ));
             }
