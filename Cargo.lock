@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-file"
-version = "0.3.3"
+version = "0.3.4-alpha.0"
 dependencies = [
  "pyo3 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "skeptic 0.13.4 (registry+https://github.com/rust-lang/crates.io-index)",
