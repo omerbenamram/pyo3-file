@@ -33,22 +33,8 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Fetch maturin release
-        id: fetch-maturin
-        uses: stryd/fetch-release-asset@v1
-        with:
-          access_token: ${{ secrets.GITHUB_TOKEN }}
-          repo: "PyO3/maturin"
-          version: "latest"
-          asset_name: maturin-x86_64-unknown-linux-musl.tar.gz
-
-      - name: extract maturin asset
         run: |
-          tar xzf maturin-x86_64-unknown-linux-musl.tar.gz
-        working-directory: ${{ steps.fetch-maturin.outputs.location }}
-
-      - name: Add maturin to path
-        run: |
-          echo "::add-path::${{ steps.fetch-maturin.outputs.location }}"
+          curl -L https://github.com/PyO3/maturin/releases/download/v0.11.0/maturin-x86_64-unknown-linux-musl.tar.gz | tar -xz
 
       - name: Build example wheel
         run: |
