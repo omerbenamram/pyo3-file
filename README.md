@@ -1,4 +1,3 @@
-[![Build Status](https://dev.azure.com/benamram/evtx/_apis/build/status/omerbenamram.pyo3-file?branchName=master)](https://dev.azure.com/benamram/evtx/_build/latest?definitionId=3&branchName=master)
 ![crates.io](https://img.shields.io/crates/v/pyo3-file.svg)
 
 # PyO3-File
@@ -18,7 +17,7 @@ from path_or_file_like import accepts_path_or_file_like
 def main():
     # should open `some_file.txt`.
     accepts_path_or_file_like("./some_file.txt")
-    
+
     # should read from the python handle.
     f = open('./some_file.txt')
     accepts_path_or_file_like(f)
@@ -29,7 +28,6 @@ We could use `pyo3_file` to extend an existing a `pyo3` module.
 ```rust
 use pyo3_file::PyFileLikeObject;
 use pyo3::types::PyString;
-use pyo3::derive_utils::IntoPyResult;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -79,14 +77,14 @@ fn accepts_path_or_file_like(
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                string.into_py_result()
+                Ok(string)
             }
             FileOrFileLike::FileLike(mut f) => {
                 println!("Its a file-like object");
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                string.into_py_result()
+                Ok(string)
             }
         },
         Err(e) => Err(e),
