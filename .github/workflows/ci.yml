@@ -37,7 +37,7 @@ jobs:
         uses: stryd/fetch-release-asset@v1
         with:
           access_token: ${{ secrets.GITHUB_TOKEN }}
-          repo_path: "PyO3/maturin"
+          repo: "PyO3/maturin"
           version: "latest"
           asset_name: maturin-x86_64-unknown-linux-musl.tar.gz
 
