@@ -50,14 +50,14 @@ fn accepts_path_or_file_like(
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                string.into_py_result()
+                Ok(string)
             }
             FileOrFileLike::FileLike(mut f) => {
                 println!("Its a file-like object");
                 let mut string = String::new();
 
                 let read = f.read_to_string(&mut string);
-                string.into_py_result()
+                Ok(string)
             }
         },
         Err(e) => Err(e),

@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - "*"
+
+jobs:
+  build-and-test:
+    name: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.x" # Version range or exact version of a Python version to use, using SemVer's version range syntax
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel pytest
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Fetch maturin release
+        id: fetch-maturin
+        uses: stryd/fetch-release-asset@v1
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_path: "PyO3/maturin"
+          version: "latest"
+          asset_name: maturin-x86_64-unknown-linux-musl.tar.gz
+
+      - name: extract maturin asset
+        run: |
+          tar xzf maturin-x86_64-unknown-linux-musl.tar.gz
+        working-directory: ${{ steps.fetch-maturin.outputs.location }}
+
+      - name: Add maturin to path
+        run: |
+          echo "::add-path::${{ steps.fetch-maturin.outputs.location }}"
+
+      - name: Build example wheel
+        run: |
+          mkdir wheels
+          maturin build -m ./examples/path_or_file_like/Cargo.toml -o ./wheels
+
+      - name: Install wheel
+        run: |
+          pip install ./wheels/*.whl
+
+      - name: Test
+        run: |
+          pytest
