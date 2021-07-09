@@ -35,11 +35,12 @@ jobs:
       - name: Fetch maturin release
         run: |
           curl -L https://github.com/PyO3/maturin/releases/download/v0.11.0/maturin-x86_64-unknown-linux-musl.tar.gz | tar -xz
+          chmod +x ./maturin
 
       - name: Build example wheel
         run: |
           mkdir wheels
-          maturin build -m ./examples/path_or_file_like/Cargo.toml -o ./wheels
+          ./maturin build -m ./examples/path_or_file_like/Cargo.toml -o ./wheels
 
       - name: Install wheel
         run: |
