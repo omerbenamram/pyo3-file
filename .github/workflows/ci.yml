@@ -17,12 +17,12 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: "3.x" # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          python-version: "3.8" # Version range or exact version of a Python version to use, using SemVer's version range syntax
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel pytest
+          python -m pip install -U pip
+          pip install -U setuptools wheel pytest
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -49,3 +49,4 @@ jobs:
       - name: Test
         run: |
           pytest
+        working-directory: ./examples/path_or_file_like
