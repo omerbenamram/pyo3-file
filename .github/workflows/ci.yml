@@ -6,8 +6,8 @@ on:
       - "*"
 
 jobs:
-  build-and-test:
-    name: build-release
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
