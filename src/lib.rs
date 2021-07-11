@@ -1,6 +1,8 @@
+use pyo3::AsPyPointer;
+use pyo3::ffi::PyTypeObject;
 use pyo3::{exceptions::PyTypeError, prelude::*};
 
-use pyo3::types::{PyBytes, PyString};
+use pyo3::types::{PyBytes, PyString, PyType};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -21,7 +23,8 @@ impl PyFileLikeObject {
         let py = gil.python();
         let io = PyModule::import(py, "io")?;
         let text_io = io.getattr("TextIOBase")?;
-        let is_text_io = object.as_ref(py).get_type().is_instance(text_io)?;
+        let text_io_type = text_io.extract::<&PyType>()?;
+        let is_text_io = text_io_type.is_instance(&object)?;
         Ok(PyFileLikeObject {
             inner: object,
             is_text_io,
