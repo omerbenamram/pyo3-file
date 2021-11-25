@@ -1,5 +1,3 @@
-use pyo3::AsPyPointer;
-use pyo3::ffi::PyTypeObject;
 use pyo3::{exceptions::PyTypeError, prelude::*};
 
 use pyo3::types::{PyBytes, PyString, PyType};
