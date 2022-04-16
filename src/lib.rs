@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyTypeError, prelude::*};
 
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyString, PyType};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -8,6 +8,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 #[derive(Debug)]
 pub struct PyFileLikeObject {
     inner: PyObject,
+    is_text_io: bool,
 }
 
 /// Wraps a `PyObject`, and implements read, seek, and write for it.
@@ -15,8 +16,17 @@ impl PyFileLikeObject {
     /// Creates an instance of a `PyFileLikeObject` from a `PyObject`.
     /// To assert the object has the required methods methods,
     /// instantiate it with `PyFileLikeObject::require`
-    pub fn new(object: PyObject) -> Self {
-        PyFileLikeObject { inner: object }
+    pub fn new(object: PyObject) -> PyResult<Self> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+        let io = PyModule::import(py, "io")?;
+        let text_io = io.getattr("TextIOBase")?;
+        let text_io_type = text_io.extract::<&PyType>()?;
+        let is_text_io = text_io_type.is_instance(&object)?;
+        Ok(PyFileLikeObject {
+            inner: object,
+            is_text_io,
+        })
     }
 
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
@@ -49,7 +59,7 @@ impl PyFileLikeObject {
             ));
         }
 
-        Ok(PyFileLikeObject::new(object))
+        PyFileLikeObject::new(object)
     }
 }
 
@@ -73,18 +83,29 @@ impl Read for PyFileLikeObject {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let bytes = self
+        if self.is_text_io {
+            let res = self
+                .inner
+                .call_method(py, "read", (buf.len(),), None)
+                .map_err(pyerr_to_io_err)?;
+            let pystring: &PyString = res
+                .cast_as(py)
+                .expect("Expecting to be able to downcast into str from read result.");
+            let bytes = pystring.to_str().unwrap().as_bytes();
+            buf.write_all(bytes)?;
+            Ok(bytes.len())
+        } else {
+            let res = self
             .inner
             .call_method(py, "read", (buf.len(),), None)
             .map_err(pyerr_to_io_err)?;
-
-        let bytes: &PyBytes = bytes
-            .cast_as(py)
-            .expect("Expecting to be able to downcast into bytes from read result.");
-
-        buf.write_all(bytes.as_bytes())?;
-
-        bytes.len().map_err(pyerr_to_io_err)
+            let pybytes: &PyBytes = res
+                .cast_as(py)
+                .expect("Expecting to be able to downcast into bytes from read result.");
+            let bytes = pybytes.as_bytes();
+            buf.write_all(bytes)?;
+            Ok(bytes.len())
+        }
     }
 }
 
@@ -93,11 +114,18 @@ impl Write for PyFileLikeObject {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        let pybytes = PyBytes::new(py, buf);
+        let arg = if self.is_text_io {
+            let s = std::str::from_utf8(buf)
+                .expect("Tried to write non-utf8 data to a TextIO object.");
+            PyString::new(py, s).to_object(py)
+        } else {
+            PyBytes::new(py, buf).to_object(py)
+        };
+
 
         let number_bytes_written = self
             .inner
-            .call_method(py, "write", (pybytes,), None)
+            .call_method(py, "write", (arg,), None)
             .map_err(pyerr_to_io_err)?;
 
         number_bytes_written.extract(py).map_err(pyerr_to_io_err)
