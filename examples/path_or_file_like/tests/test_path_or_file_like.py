@@ -17,6 +17,11 @@ def test_it_works_on_io_object(small_sample):
 
     assert accepts_path_or_file_like(io.BytesIO(r)) == "Hello World!"
 
+def test_it_works_on_textio_object(small_sample):
+    with open(small_sample, "rt") as o:
+        r = o.read()
+
+    assert accepts_path_or_file_like(io.StringIO(r)) == "Hello World!"
 
 def test_it_works_on_file_backed_object(small_sample):
     with open(small_sample, "rb") as o:
@@ -26,4 +31,5 @@ def test_it_works_on_file_backed_object(small_sample):
 def test_it_fails_on_non_file_object():
     with pytest.raises(TypeError):
         accepts_path_or_file_like(3)
+
 

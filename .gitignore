@@ -5,3 +5,6 @@
 *.pyc
 .idea
 .history
+
+Cargo.lock
+.venv

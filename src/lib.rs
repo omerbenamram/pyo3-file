@@ -21,8 +21,10 @@ impl PyFileLikeObject {
         let py = gil.python();
         let io = PyModule::import(py, "io")?;
         let text_io = io.getattr("TextIOBase")?;
+
         let text_io_type = text_io.extract::<&PyType>()?;
         let is_text_io = text_io_type.is_instance(&object)?;
+
         Ok(PyFileLikeObject {
             inner: object,
             is_text_io,
@@ -96,9 +98,9 @@ impl Read for PyFileLikeObject {
             Ok(bytes.len())
         } else {
             let res = self
-            .inner
-            .call_method(py, "read", (buf.len(),), None)
-            .map_err(pyerr_to_io_err)?;
+                .inner
+                .call_method(py, "read", (buf.len(),), None)
+                .map_err(pyerr_to_io_err)?;
             let pybytes: &PyBytes = res
                 .cast_as(py)
                 .expect("Expecting to be able to downcast into bytes from read result.");
@@ -115,13 +117,12 @@ impl Write for PyFileLikeObject {
         let py = gil.python();
 
         let arg = if self.is_text_io {
-            let s = std::str::from_utf8(buf)
-                .expect("Tried to write non-utf8 data to a TextIO object.");
+            let s =
+                std::str::from_utf8(buf).expect("Tried to write non-utf8 data to a TextIO object.");
             PyString::new(py, s).to_object(py)
         } else {
             PyBytes::new(py, buf).to_object(py)
         };
-
 
         let number_bytes_written = self
             .inner
