@@ -10,5 +10,5 @@ name = "path_or_file_like"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3-file = {path="../../"}
-pyo3 = {version = "0.16.4", features=["extension-module"]}
+pyo3-file = { path = "../../" }
+pyo3 = { version = "0.18.1", features = ["extension-module"] }

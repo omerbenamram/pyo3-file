@@ -15,21 +15,20 @@ enum FileOrFileLike {
 
 impl FileOrFileLike {
     pub fn from_pyobject(path_or_file_like: PyObject) -> PyResult<FileOrFileLike> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
+        Python::with_gil(|py| {
+            // is a path
+            if let Ok(string_ref) = path_or_file_like.downcast::<PyString>(py) {
+                return Ok(FileOrFileLike::File(
+                    string_ref.to_string_lossy().to_string(),
+                ));
+            }
 
-        // is a path
-        if let Ok(string_ref) = path_or_file_like.cast_as::<PyString>(py) {
-            return Ok(FileOrFileLike::File(
-                string_ref.to_string_lossy().to_string(),
-            ));
-        }
-
-        // is a file-like
-        match PyFileLikeObject::with_requirements(path_or_file_like, true, false, true) {
-            Ok(f) => Ok(FileOrFileLike::FileLike(f)),
-            Err(e) => Err(e),
-        }
+            // is a file-like
+            match PyFileLikeObject::with_requirements(path_or_file_like, true, false, true) {
+                Ok(f) => Ok(FileOrFileLike::FileLike(f)),
+                Err(e) => Err(e),
+            }
+        })
     }
 }
 

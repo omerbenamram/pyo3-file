@@ -22,7 +22,7 @@ impl PyFileLikeObject {
             let text_io = io.getattr("TextIOBase")?;
 
             let text_io_type = text_io.extract::<&PyType>()?;
-            let is_text_io = text_io_type.is_instance(&object)?;
+            let is_text_io = object.as_ref(py).is_instance(text_io_type)?;
 
             Ok(PyFileLikeObject {
                 inner: object,
@@ -88,7 +88,7 @@ impl Read for PyFileLikeObject {
                     .call_method(py, "read", (buf.len(),), None)
                     .map_err(pyerr_to_io_err)?;
                 let pystring: &PyString = res
-                    .cast_as(py)
+                    .downcast(py)
                     .expect("Expecting to be able to downcast into str from read result.");
                 let bytes = pystring.to_str().unwrap().as_bytes();
                 buf.write_all(bytes)?;
@@ -99,7 +99,7 @@ impl Read for PyFileLikeObject {
                     .call_method(py, "read", (buf.len(),), None)
                     .map_err(pyerr_to_io_err)?;
                 let pybytes: &PyBytes = res
-                    .cast_as(py)
+                    .downcast(py)
                     .expect("Expecting to be able to downcast into bytes from read result.");
                 let bytes = pybytes.as_bytes();
                 buf.write_all(bytes)?;
@@ -145,8 +145,8 @@ impl Seek for PyFileLikeObject {
         Python::with_gil(|py| {
             let (whence, offset) = match pos {
                 SeekFrom::Start(i) => (0, i as i64),
-                SeekFrom::Current(i) => (1, i as i64),
-                SeekFrom::End(i) => (2, i as i64),
+                SeekFrom::Current(i) => (1, i),
+                SeekFrom::End(i) => (2, i),
             };
 
             let new_position = self
