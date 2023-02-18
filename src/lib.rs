@@ -83,9 +83,14 @@ impl Read for PyFileLikeObject {
     fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, io::Error> {
         Python::with_gil(|py| {
             if self.is_text_io {
+                if buf.len() < 4 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other, "buffer size must be at least 4 bytes"
+                    ));
+                }
                 let res = self
                     .inner
-                    .call_method(py, "read", (buf.len(),), None)
+                    .call_method(py, "read", (buf.len()/4,), None)
                     .map_err(pyerr_to_io_err)?;
                 let pystring: &PyString = res
                     .downcast(py)
