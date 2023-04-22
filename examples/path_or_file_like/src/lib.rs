@@ -4,7 +4,7 @@ use pyo3_file::PyFileLikeObject;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 
 /// Represents either a path `File` or a file-like object `FileLike`
 #[derive(Debug)]
@@ -34,7 +34,7 @@ impl FileOrFileLike {
 
 #[pyfunction]
 /// Opens a file or file-like, and reads it to string.
-fn accepts_path_or_file_like(path_or_file_like: PyObject) -> PyResult<String> {
+fn accepts_path_or_file_like_read(path_or_file_like: PyObject) -> PyResult<String> {
     match FileOrFileLike::from_pyobject(path_or_file_like) {
         Ok(f) => match f {
             FileOrFileLike::File(s) => {
@@ -57,9 +57,24 @@ fn accepts_path_or_file_like(path_or_file_like: PyObject) -> PyResult<String> {
     }
 }
 
+#[pyfunction]
+/// Opens a file or file-like, and write a string to it.
+fn accepts_file_like_write(file_like: PyObject) -> PyResult<()> {
+    // is a file-like
+    match PyFileLikeObject::with_requirements(file_like, false, true, false) {
+        Ok(mut f) => {
+            println!("Its a file-like object");
+            f.write_all(b"Hello, world!")?;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 #[pymodule]
 fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like))?;
+    m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
+    m.add_wrapped(wrap_pyfunction!(accepts_file_like_write))?;
 
     Ok(())
 }
