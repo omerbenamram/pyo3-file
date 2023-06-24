@@ -85,12 +85,13 @@ impl Read for PyFileLikeObject {
             if self.is_text_io {
                 if buf.len() < 4 {
                     return Err(io::Error::new(
-                        io::ErrorKind::Other, "buffer size must be at least 4 bytes"
+                        io::ErrorKind::Other,
+                        "buffer size must be at least 4 bytes",
                     ));
                 }
                 let res = self
                     .inner
-                    .call_method(py, "read", (buf.len()/4,), None)
+                    .call_method(py, "read", (buf.len() / 4,), None)
                     .map_err(pyerr_to_io_err)?;
                 let pystring: &PyString = res
                     .downcast(py)
@@ -129,6 +130,13 @@ impl Write for PyFileLikeObject {
                 .inner
                 .call_method(py, "write", (arg,), None)
                 .map_err(pyerr_to_io_err)?;
+
+            if number_bytes_written.is_none(py) {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "write() returned None, expected number of bytes written",
+                ));
+            }
 
             number_bytes_written.extract(py).map_err(pyerr_to_io_err)
         })
