@@ -4,6 +4,7 @@ use pyo3::types::{PyBytes, PyString, PyType};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::fd::{AsRawFd, RawFd};
 
 #[derive(Debug)]
 pub struct PyFileLikeObject {
@@ -33,12 +34,13 @@ impl PyFileLikeObject {
 
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
     /// python object has a `read`, `write`, and `seek` methods in respect to parameters.
-    /// Will return a `TypeError` if object does not have `read`, `seek`, and `write` methods.
+    /// Will return a `TypeError` if object does not have `read`, `seek`, `write` and `fileno` methods.
     pub fn with_requirements(
         object: PyObject,
         read: bool,
         write: bool,
         seek: bool,
+        fileno: bool,
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
             if read && object.getattr(py, "read").is_err() {
@@ -56,6 +58,12 @@ impl PyFileLikeObject {
             if write && object.getattr(py, "write").is_err() {
                 return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .write() method.",
+                ));
+            }
+
+            if fileno && object.getattr(py, "fileno").is_err() {
+                return Err(PyErr::new::<PyTypeError, _>(
+                    "Object does not have a .fileno() method.",
                 ));
             }
 
@@ -168,6 +176,23 @@ impl Seek for PyFileLikeObject {
                 .map_err(pyerr_to_io_err)?;
 
             new_position.extract(py).map_err(pyerr_to_io_err)
+        })
+    }
+}
+
+impl AsRawFd for PyFileLikeObject {
+    fn as_raw_fd(&self) -> RawFd {
+        Python::with_gil(|py| {
+            let fileno = self
+                .inner
+                .getattr(py, "fileno")
+                .expect("Object does not have a fileno() method.");
+
+            let fd = fileno
+                .call(py, (), None)
+                .expect("fileno() method did not return a file descriptor.");
+
+            fd.extract(py).expect("File descriptor is not an integer.")
         })
     }
 }
