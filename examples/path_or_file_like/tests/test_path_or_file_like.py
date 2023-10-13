@@ -1,5 +1,6 @@
 import pytest
 import io
+import tempfile
 from pathlib import Path
 
 from path_or_file_like import accepts_path_or_file_like_read, accepts_file_like_write
@@ -43,6 +44,12 @@ def test_it_fails_when_write_returns_none():
         accepts_file_like_write(FileLike())
 
 
+def test_write_non_writable_file(small_sample):
+    with open(small_sample, "rb") as o:
+        with pytest.raises(TypeError, match=r'object is not writable'):
+            accepts_file_like_write(o)
+
+
 def test_it_writes_to_io_object():
     f = io.BytesIO()
     accepts_file_like_write(f)
@@ -53,3 +60,16 @@ def test_it_writes_to_textio_object():
     f = io.StringIO()
     accepts_file_like_write(f)
     assert f.getvalue() == "Hello, world!"
+
+
+def test_it_writes_to_file():
+    with tempfile.TemporaryFile() as f:
+        accepts_file_like_write(f)
+        f.seek(0)
+        assert f.read() == b"Hello, world!"
+
+def test_it_writes_to_text_file():
+    with tempfile.TemporaryFile("wt+", encoding="utf8") as f:
+        accepts_file_like_write(f)
+        f.seek(0)
+        assert f.read() == "Hello, world!"
