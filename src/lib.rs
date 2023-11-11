@@ -64,6 +64,14 @@ impl PyFileLikeObject {
     }
 }
 
+impl Clone for PyFileLikeObject {
+    fn clone(&self) -> Self {
+        Python::with_gil(|py| {
+            PyFileLikeObject::new(self.inner.clone_ref(py)).expect("Failed to clone")
+        })
+    }
+}
+
 /// Extracts a string repr from, and returns an IO error to send back to rust.
 fn pyerr_to_io_err(e: PyErr) -> io::Error {
     Python::with_gil(|py| {
