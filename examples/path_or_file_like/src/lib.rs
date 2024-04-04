@@ -72,7 +72,7 @@ fn accepts_file_like_write(file_like: PyObject) -> PyResult<()> {
 }
 
 #[pymodule]
-fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
+fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
     m.add_wrapped(wrap_pyfunction!(accepts_file_like_write))?;
 
