@@ -17,7 +17,7 @@ impl FileOrFileLike {
     pub fn from_pyobject(path_or_file_like: PyObject) -> PyResult<FileOrFileLike> {
         Python::with_gil(|py| {
             // is a path
-            if let Ok(string_ref) = path_or_file_like.downcast::<PyString>(py) {
+            if let Ok(string_ref) = path_or_file_like.downcast_bound::<PyString>(py) {
                 return Ok(FileOrFileLike::File(
                     string_ref.to_string_lossy().to_string(),
                 ));
@@ -72,7 +72,7 @@ fn accepts_file_like_write(file_like: PyObject) -> PyResult<()> {
 }
 
 #[pymodule]
-fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
+fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
     m.add_wrapped(wrap_pyfunction!(accepts_file_like_write))?;
 

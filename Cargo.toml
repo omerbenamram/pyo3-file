@@ -6,12 +6,12 @@ repository = "https://github.com/omerbenamram/pyo3-file"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Omer Ben-Amram <omerbenamram@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-pyo3 = { version = ">=0.18.1,<0.21" }
+pyo3 = { version = ">=0.21,<0.22" }
 
 [dev-dependencies]
 skeptic = "0.13.7"
