@@ -17,7 +17,7 @@ impl FileOrFileLike {
     pub fn from_pyobject(path_or_file_like: PyObject) -> PyResult<FileOrFileLike> {
         Python::with_gil(|py| {
             // is a path
-            if let Ok(string_ref) = path_or_file_like.downcast::<PyString>(py) {
+            if let Ok(string_ref) = path_or_file_like.downcast_bound::<PyString>(py) {
                 return Ok(FileOrFileLike::File(
                     string_ref.to_string_lossy().to_string(),
                 ));
