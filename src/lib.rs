@@ -117,7 +117,6 @@ impl Read for PyFileLikeObject {
                 let bytes = rust_string.as_bytes();
                 buf.write_all(bytes)?;
                 Ok(bytes.len())
-
             } else {
                 let res = self
                     .inner
