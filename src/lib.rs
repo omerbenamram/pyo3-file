@@ -81,18 +81,18 @@ impl Clone for PyFileLikeObject {
 }
 
 /// Extracts a string repr from, and returns an IO error to send back to rust.
-fn pyerr_to_io_err(e: PyErr) -> io::Error {
-    Python::with_gil(|py| {
-        let e_as_object: PyObject = e.into_py(py);
+fn pyerr_to_io_err(py: Python<'_>, e: PyErr) -> io::Error {
+    let e_as_object = e.value_bound(py);
 
-        match e_as_object.call_method_bound(py, "__str__", (), None) {
-            Ok(repr) => match repr.extract::<String>(py) {
-                Ok(s) => io::Error::new(io::ErrorKind::Other, s),
-                Err(_e) => io::Error::new(io::ErrorKind::Other, "An unknown error has occurred"),
-            },
-            Err(_) => io::Error::new(io::ErrorKind::Other, "Err doesn't have __str__"),
-        }
-    })
+    let kind = match e_as_object
+        .getattr(pyo3::intern!(py, "errno"))
+        .and_then(|errno| errno.extract())
+    {
+        Ok(errno) => io::Error::from_raw_os_error(errno).kind(),
+        Err(_) => io::ErrorKind::Other,
+    };
+
+    io::Error::new(kind, e)
 }
 
 impl Read for PyFileLikeObject {
@@ -108,7 +108,7 @@ impl Read for PyFileLikeObject {
                 let res = self
                     .inner
                     .call_method_bound(py, "read", (buf.len() / 4,), None)
-                    .map_err(pyerr_to_io_err)?;
+                    .map_err(|err| pyerr_to_io_err(py, err))?;
                 let pystring = res
                     .downcast_bound::<PyString>(py)
                     .expect("Expecting to be able to downcast into str from read result.");
@@ -121,7 +121,7 @@ impl Read for PyFileLikeObject {
                 let res = self
                     .inner
                     .call_method_bound(py, "read", (buf.len(),), None)
-                    .map_err(pyerr_to_io_err)?;
+                    .map_err(|err| pyerr_to_io_err(py, err))?;
                 let pybytes = res
                     .downcast_bound(py)
                     .expect("Expecting to be able to downcast into bytes from read result.");
@@ -147,7 +147,7 @@ impl Write for PyFileLikeObject {
             let number_bytes_written = self
                 .inner
                 .call_method_bound(py, "write", (arg,), None)
-                .map_err(pyerr_to_io_err)?;
+                .map_err(|err| pyerr_to_io_err(py, err))?;
 
             if number_bytes_written.is_none(py) {
                 return Err(io::Error::new(
@@ -156,7 +156,9 @@ impl Write for PyFileLikeObject {
                 ));
             }
 
-            number_bytes_written.extract(py).map_err(pyerr_to_io_err)
+            number_bytes_written
+                .extract(py)
+                .map_err(|err| pyerr_to_io_err(py, err))
         })
     }
 
@@ -164,7 +166,7 @@ impl Write for PyFileLikeObject {
         Python::with_gil(|py| {
             self.inner
                 .call_method_bound(py, "flush", (), None)
-                .map_err(pyerr_to_io_err)?;
+                .map_err(|err| pyerr_to_io_err(py, err))?;
 
             Ok(())
         })
@@ -183,9 +185,11 @@ impl Seek for PyFileLikeObject {
             let new_position = self
                 .inner
                 .call_method_bound(py, "seek", (offset, whence), None)
-                .map_err(pyerr_to_io_err)?;
+                .map_err(|err| pyerr_to_io_err(py, err))?;
 
-            new_position.extract(py).map_err(pyerr_to_io_err)
+            new_position
+                .extract(py)
+                .map_err(|err| pyerr_to_io_err(py, err))
         })
     }
 }
