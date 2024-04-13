@@ -1,4 +1,5 @@
 use pyo3::{exceptions::PyTypeError, prelude::*};
+use std::borrow::Cow;
 
 use pyo3::types::{PyBytes, PyString};
 
@@ -84,23 +85,16 @@ impl Read for PyFileLikeObject {
                 let res =
                     self.inner
                         .call_method_bound(py, consts::read(py), (buf.len() / 4,), None)?;
-                let pystring = res
-                    .downcast_bound::<PyString>(py)
-                    .expect("Expecting to be able to downcast into str from read result.");
-
-                let rust_string = pystring.extract::<String>().unwrap();
+                let rust_string = res.extract::<Cow<str>>(py)?;
                 let bytes = rust_string.as_bytes();
                 buf.write_all(bytes)?;
                 Ok(bytes.len())
             } else {
-                let res = self
-                    .inner
-                    .call_method_bound(py, consts::read(py), (buf.len(),), None)?;
-                let pybytes = res
-                    .downcast_bound(py)
-                    .expect("Expecting to be able to downcast into bytes from read result.");
-                let bytes = pybytes.extract().unwrap();
-                buf.write_all(bytes)?;
+                let pybytes =
+                    self.inner
+                        .call_method_bound(py, consts::read(py), (buf.len(),), None)?;
+                let bytes = pybytes.extract::<Cow<[u8]>>(py)?;
+                buf.write_all(&bytes)?;
                 Ok(bytes.len())
             }
         })
