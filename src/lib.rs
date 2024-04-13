@@ -7,7 +7,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(not(target_os = "windows"))]
 use std::os::fd::{AsRawFd, RawFd};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PyFileLikeObject {
     inner: PyObject,
     is_text_io: bool,
@@ -68,14 +68,6 @@ impl PyFileLikeObject {
             }
 
             PyFileLikeObject::new(object)
-        })
-    }
-}
-
-impl Clone for PyFileLikeObject {
-    fn clone(&self) -> Self {
-        Python::with_gil(|py| {
-            PyFileLikeObject::new(self.inner.clone_ref(py)).expect("Failed to clone")
         })
     }
 }
