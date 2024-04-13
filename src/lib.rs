@@ -20,10 +20,9 @@ impl PyFileLikeObject {
     /// instantiate it with `PyFileLikeObject::require`
     pub fn new(object: PyObject) -> PyResult<Self> {
         Python::with_gil(|py| {
-            let io = PyModule::import_bound(py, "io")?;
-            let text_io = io.getattr("TextIOBase")?;
+            let text_io = consts::text_io_base(py)?;
 
-            let is_text_io = object.bind(py).is_instance(&text_io)?;
+            let is_text_io = object.bind(py).is_instance(text_io)?;
 
             Ok(PyFileLikeObject {
                 inner: object,
@@ -43,25 +42,25 @@ impl PyFileLikeObject {
         fileno: bool,
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
-            if read && object.getattr(py, "read").is_err() {
+            if read && object.getattr(py, consts::read(py)).is_err() {
                 return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .read() method.",
                 ));
             }
 
-            if seek && object.getattr(py, "seek").is_err() {
+            if seek && object.getattr(py, consts::seek(py)).is_err() {
                 return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .seek() method.",
                 ));
             }
 
-            if write && object.getattr(py, "write").is_err() {
+            if write && object.getattr(py, consts::write(py)).is_err() {
                 return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .write() method.",
                 ));
             }
 
-            if fileno && object.getattr(py, "fileno").is_err() {
+            if fileno && object.getattr(py, consts::fileno(py)).is_err() {
                 return Err(PyErr::new::<PyTypeError, _>(
                     "Object does not have a .fileno() method.",
                 ));
@@ -82,9 +81,9 @@ impl Read for PyFileLikeObject {
                         "buffer size must be at least 4 bytes",
                     ));
                 }
-                let res = self
-                    .inner
-                    .call_method_bound(py, "read", (buf.len() / 4,), None)?;
+                let res =
+                    self.inner
+                        .call_method_bound(py, consts::read(py), (buf.len() / 4,), None)?;
                 let pystring = res
                     .downcast_bound::<PyString>(py)
                     .expect("Expecting to be able to downcast into str from read result.");
@@ -96,7 +95,7 @@ impl Read for PyFileLikeObject {
             } else {
                 let res = self
                     .inner
-                    .call_method_bound(py, "read", (buf.len(),), None)?;
+                    .call_method_bound(py, consts::read(py), (buf.len(),), None)?;
                 let pybytes = res
                     .downcast_bound(py)
                     .expect("Expecting to be able to downcast into bytes from read result.");
@@ -119,7 +118,9 @@ impl Write for PyFileLikeObject {
                 PyBytes::new_bound(py, buf).to_object(py)
             };
 
-            let number_bytes_written = self.inner.call_method_bound(py, "write", (arg,), None)?;
+            let number_bytes_written =
+                self.inner
+                    .call_method_bound(py, consts::write(py), (arg,), None)?;
 
             if number_bytes_written.is_none(py) {
                 return Err(io::Error::new(
@@ -134,7 +135,8 @@ impl Write for PyFileLikeObject {
 
     fn flush(&mut self) -> Result<(), io::Error> {
         Python::with_gil(|py| {
-            self.inner.call_method_bound(py, "flush", (), None)?;
+            self.inner
+                .call_method_bound(py, consts::flush(py), (), None)?;
 
             Ok(())
         })
@@ -150,9 +152,9 @@ impl Seek for PyFileLikeObject {
                 SeekFrom::End(i) => (2, i),
             };
 
-            let new_position = self
-                .inner
-                .call_method_bound(py, "seek", (offset, whence), None)?;
+            let new_position =
+                self.inner
+                    .call_method_bound(py, consts::seek(py), (offset, whence), None)?;
 
             new_position.extract(py).map_err(io::Error::from)
         })
@@ -165,7 +167,7 @@ impl AsRawFd for PyFileLikeObject {
         Python::with_gil(|py| {
             let fileno = self
                 .inner
-                .getattr(py, "fileno")
+                .getattr(py, consts::fileno(py))
                 .expect("Object does not have a fileno() method.");
 
             let fd = fileno
@@ -174,5 +176,44 @@ impl AsRawFd for PyFileLikeObject {
 
             fd.extract(py).expect("File descriptor is not an integer.")
         })
+    }
+}
+
+mod consts {
+    use pyo3::prelude::*;
+    use pyo3::sync::GILOnceCell;
+    use pyo3::types::PyString;
+    use pyo3::{intern, Bound, Py, PyResult, Python};
+
+    pub fn fileno<'py>(py: Python<'py>) -> &'py Bound<PyString> {
+        intern!(py, "fileno")
+    }
+
+    pub fn read<'py>(py: Python<'py>) -> &'py Bound<PyString> {
+        intern!(py, "read")
+    }
+
+    pub fn write<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+        intern!(py, "write")
+    }
+
+    pub fn seek<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+        intern!(py, "seek")
+    }
+
+    pub fn flush<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+        intern!(py, "flush")
+    }
+
+    pub fn text_io_base<'py>(py: Python<'py>) -> PyResult<&'py Bound<PyAny>> {
+        static INSTANCE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
+
+        INSTANCE
+            .get_or_try_init(py, || {
+                let io = PyModule::import_bound(py, "io")?;
+                let cls = io.getattr("TextIOBase")?;
+                Ok(cls.unbind())
+            })
+            .map(|x| x.bind(py))
     }
 }
