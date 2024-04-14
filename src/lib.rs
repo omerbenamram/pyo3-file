@@ -44,25 +44,25 @@ impl PyFileLikeObject {
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
             if read && object.getattr(py, consts::read(py)).is_err() {
-                return Err(PyErr::new::<PyTypeError, _>(
+                return Err(PyTypeError::new_err(
                     "Object does not have a .read() method.",
                 ));
             }
 
             if seek && object.getattr(py, consts::seek(py)).is_err() {
-                return Err(PyErr::new::<PyTypeError, _>(
+                return Err(PyTypeError::new_err(
                     "Object does not have a .seek() method.",
                 ));
             }
 
             if write && object.getattr(py, consts::write(py)).is_err() {
-                return Err(PyErr::new::<PyTypeError, _>(
+                return Err(PyTypeError::new_err(
                     "Object does not have a .write() method.",
                 ));
             }
 
             if fileno && object.getattr(py, consts::fileno(py)).is_err() {
-                return Err(PyErr::new::<PyTypeError, _>(
+                return Err(PyTypeError::new_err(
                     "Object does not have a .fileno() method.",
                 ));
             }
