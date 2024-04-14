@@ -20,16 +20,7 @@ impl PyFileLikeObject {
     /// To assert the object has the required methods methods,
     /// instantiate it with `PyFileLikeObject::require`
     pub fn new(object: PyObject) -> PyResult<Self> {
-        Python::with_gil(|py| {
-            let text_io = consts::text_io_base(py)?;
-
-            let is_text_io = object.bind(py).is_instance(text_io)?;
-
-            Ok(PyFileLikeObject {
-                inner: object,
-                is_text_io,
-            })
-        })
+        Python::with_gil(|py| Self::py_new(object.into_bound(py)))
     }
 
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
@@ -43,133 +34,161 @@ impl PyFileLikeObject {
         fileno: bool,
     ) -> PyResult<Self> {
         Python::with_gil(|py| {
-            if read && object.getattr(py, consts::read(py)).is_err() {
-                return Err(PyTypeError::new_err(
-                    "Object does not have a .read() method.",
-                ));
-            }
-
-            if seek && object.getattr(py, consts::seek(py)).is_err() {
-                return Err(PyTypeError::new_err(
-                    "Object does not have a .seek() method.",
-                ));
-            }
-
-            if write && object.getattr(py, consts::write(py)).is_err() {
-                return Err(PyTypeError::new_err(
-                    "Object does not have a .write() method.",
-                ));
-            }
-
-            if fileno && object.getattr(py, consts::fileno(py)).is_err() {
-                return Err(PyTypeError::new_err(
-                    "Object does not have a .fileno() method.",
-                ));
-            }
-
-            PyFileLikeObject::new(object)
+            Self::py_with_requirements(object.into_bound(py), read, write, seek, fileno)
         })
     }
 }
 
-impl Read for PyFileLikeObject {
-    fn read(&mut self, mut buf: &mut [u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| {
-            if self.is_text_io {
-                if buf.len() < 4 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "buffer size must be at least 4 bytes",
-                    ));
-                }
-                let res =
-                    self.inner
-                        .call_method_bound(py, consts::read(py), (buf.len() / 4,), None)?;
-                let rust_string = res.extract::<Cow<str>>(py)?;
-                let bytes = rust_string.as_bytes();
-                buf.write_all(bytes)?;
-                Ok(bytes.len())
-            } else {
-                let pybytes =
-                    self.inner
-                        .call_method_bound(py, consts::read(py), (buf.len(),), None)?;
-                let bytes = pybytes.extract::<Cow<[u8]>>(py)?;
-                buf.write_all(&bytes)?;
-                Ok(bytes.len())
-            }
+impl PyFileLikeObject {
+    pub fn py_new(obj: Bound<PyAny>) -> PyResult<Self> {
+        let text_io = consts::text_io_base(obj.py())?;
+        let is_text_io = obj.is_instance(text_io)?;
+
+        Ok(PyFileLikeObject {
+            inner: obj.unbind(),
+            is_text_io,
         })
+    }
+
+    pub fn py_with_requirements(
+        obj: Bound<PyAny>,
+        read: bool,
+        write: bool,
+        seek: bool,
+        fileno: bool,
+    ) -> PyResult<Self> {
+        if read && !obj.hasattr(consts::read(obj.py()))? {
+            return Err(PyTypeError::new_err(
+                "Object does not have a .read() method.",
+            ));
+        }
+
+        if seek && !obj.hasattr(consts::seek(obj.py()))? {
+            return Err(PyTypeError::new_err(
+                "Object does not have a .seek() method.",
+            ));
+        }
+
+        if write && !obj.hasattr(consts::write(obj.py()))? {
+            return Err(PyTypeError::new_err(
+                "Object does not have a .write() method.",
+            ));
+        }
+
+        if fileno && !obj.hasattr(consts::fileno(obj.py()))? {
+            return Err(PyTypeError::new_err(
+                "Object does not have a .fileno() method.",
+            ));
+        }
+
+        PyFileLikeObject::py_new(obj)
+    }
+
+    pub fn py_read(&self, py: Python<'_>, mut buf: &mut [u8]) -> io::Result<usize> {
+        let inner = self.inner.bind(py);
+        if self.is_text_io {
+            if buf.len() < 4 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "buffer size must be at least 4 bytes",
+                ));
+            }
+            let res = inner.call_method1(consts::read(py), (buf.len() / 4,))?;
+            let rust_string = res.extract::<Cow<str>>()?;
+            let bytes = rust_string.as_bytes();
+            buf.write_all(bytes)?;
+            Ok(bytes.len())
+        } else {
+            let pybytes = inner.call_method1(consts::read(py), (buf.len(),))?;
+            let bytes = pybytes.extract::<Cow<[u8]>>()?;
+            buf.write_all(&bytes)?;
+            Ok(bytes.len())
+        }
+    }
+
+    pub fn py_write(&self, py: Python<'_>, buf: &[u8]) -> io::Result<usize> {
+        let inner = self.inner.bind(py);
+        let arg = if self.is_text_io {
+            let s =
+                std::str::from_utf8(buf).expect("Tried to write non-utf8 data to a TextIO object.");
+            PyString::new_bound(py, s).to_object(py)
+        } else {
+            PyBytes::new_bound(py, buf).to_object(py)
+        };
+
+        let number_bytes_written = inner.call_method1(consts::write(py), (arg,))?;
+
+        if number_bytes_written.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "write() returned None, expected number of bytes written",
+            ));
+        }
+
+        number_bytes_written.extract().map_err(io::Error::from)
+    }
+
+    pub fn py_flush(&self, py: Python<'_>) -> io::Result<()> {
+        self.inner.call_method0(py, consts::flush(py))?;
+        Ok(())
+    }
+
+    pub fn py_seek(&self, py: Python<'_>, pos: SeekFrom) -> io::Result<u64> {
+        let inner = self.inner.bind(py);
+        let (whence, offset) = match pos {
+            SeekFrom::Start(offset) => (0, offset as i64),
+            SeekFrom::End(offset) => (2, offset),
+            SeekFrom::Current(offset) => (1, offset),
+        };
+
+        let res = inner.call_method1(consts::seek(py), (offset, whence))?;
+        res.extract().map_err(io::Error::from)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn py_as_raw_fd(&self, py: Python<'_>) -> RawFd {
+        let inner = self.inner.bind(py);
+        let fd = inner
+            .call_method0(consts::fileno(py))
+            .expect("Object does not have a fileno() method.");
+
+        fd.extract().expect("File descriptor is not an integer.")
+    }
+
+    pub fn py_clone(&self, py: Python<'_>) -> PyFileLikeObject {
+        PyFileLikeObject {
+            inner: self.inner.clone_ref(py),
+            is_text_io: self.is_text_io,
+        }
+    }
+}
+
+impl Read for PyFileLikeObject {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        Python::with_gil(|py| self.py_read(py, buf))
     }
 }
 
 impl Write for PyFileLikeObject {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| {
-            let arg = if self.is_text_io {
-                let s = std::str::from_utf8(buf)
-                    .expect("Tried to write non-utf8 data to a TextIO object.");
-                PyString::new_bound(py, s).to_object(py)
-            } else {
-                PyBytes::new_bound(py, buf).to_object(py)
-            };
-
-            let number_bytes_written =
-                self.inner
-                    .call_method_bound(py, consts::write(py), (arg,), None)?;
-
-            if number_bytes_written.is_none(py) {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "write() returned None, expected number of bytes written",
-                ));
-            }
-
-            number_bytes_written.extract(py).map_err(io::Error::from)
-        })
+        Python::with_gil(|py| self.py_write(py, buf))
     }
 
     fn flush(&mut self) -> Result<(), io::Error> {
-        Python::with_gil(|py| {
-            self.inner
-                .call_method_bound(py, consts::flush(py), (), None)?;
-
-            Ok(())
-        })
+        Python::with_gil(|py| self.py_flush(py))
     }
 }
 
 impl Seek for PyFileLikeObject {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
-        Python::with_gil(|py| {
-            let (whence, offset) = match pos {
-                SeekFrom::Start(i) => (0, i as i64),
-                SeekFrom::Current(i) => (1, i),
-                SeekFrom::End(i) => (2, i),
-            };
-
-            let new_position =
-                self.inner
-                    .call_method_bound(py, consts::seek(py), (offset, whence), None)?;
-
-            new_position.extract(py).map_err(io::Error::from)
-        })
+        Python::with_gil(|py| self.py_seek(py, pos))
     }
 }
 
 #[cfg(not(target_os = "windows"))]
 impl AsRawFd for PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
-        Python::with_gil(|py| {
-            let fileno = self
-                .inner
-                .getattr(py, consts::fileno(py))
-                .expect("Object does not have a fileno() method.");
-
-            let fd = fileno
-                .call_bound(py, (), None)
-                .expect("fileno() method did not return a file descriptor.");
-
-            fd.extract(py).expect("File descriptor is not an integer.")
-        })
+        Python::with_gil(|py| self.py_as_raw_fd(py))
     }
 }
 
