@@ -169,7 +169,23 @@ impl Read for PyFileLikeObject {
     }
 }
 
+impl Read for &PyFileLikeObject {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        Python::with_gil(|py| self.py_read(py, buf))
+    }
+}
+
 impl Write for PyFileLikeObject {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+        Python::with_gil(|py| self.py_write(py, buf))
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        Python::with_gil(|py| self.py_flush(py))
+    }
+}
+
+impl Write for &PyFileLikeObject {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
         Python::with_gil(|py| self.py_write(py, buf))
     }
@@ -185,8 +201,21 @@ impl Seek for PyFileLikeObject {
     }
 }
 
+impl Seek for &PyFileLikeObject {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
+        Python::with_gil(|py| self.py_seek(py, pos))
+    }
+}
+
 #[cfg(unix)]
 impl AsRawFd for PyFileLikeObject {
+    fn as_raw_fd(&self) -> RawFd {
+        Python::with_gil(|py| self.py_as_raw_fd(py))
+    }
+}
+
+#[cfg(unix)]
+impl AsRawFd for &PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
         Python::with_gil(|py| self.py_as_raw_fd(py))
     }
