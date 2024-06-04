@@ -5,7 +5,7 @@ use pyo3::types::{PyBytes, PyString};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
-#[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
 use std::os::fd::{AsRawFd, RawFd};
 
 #[derive(Debug, Clone)]
@@ -145,7 +145,7 @@ impl PyFileLikeObject {
         res.extract().map_err(io::Error::from)
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(unix)]
     pub fn py_as_raw_fd(&self, py: Python<'_>) -> RawFd {
         let inner = self.inner.bind(py);
         let fd = inner
@@ -185,7 +185,7 @@ impl Seek for PyFileLikeObject {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
 impl AsRawFd for PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
         Python::with_gil(|py| self.py_as_raw_fd(py))
