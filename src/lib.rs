@@ -1,5 +1,6 @@
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
+use std::path::PathBuf;
 
 use pyo3::types::{PyBytes, PyString};
 
@@ -8,10 +9,22 @@ use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, RawFd};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PyFileLikeObject {
+    // We use PyObject instead of Bound<PyAny> because Bound<PyAny> is a GIL-bound type.
+    // We want to avoid holding the GIL when creating the struct.
+    // The GIL will be re-taken when the methods are called.
     inner: PyObject,
     is_text_io: bool,
+}
+
+impl Clone for PyFileLikeObject {
+    fn clone(&self) -> Self {
+        Python::with_gil(|py| PyFileLikeObject {
+            inner: self.inner.clone_ref(py),
+            is_text_io: self.is_text_io,
+        })
+    }
 }
 
 /// Wraps a `PyObject`, and implements read, seek, and write for it.
