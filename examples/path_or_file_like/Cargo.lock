@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-file"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "pyo3",
  "skeptic",
