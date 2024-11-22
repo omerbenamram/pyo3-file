@@ -1,6 +1,5 @@
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
-use std::path::PathBuf;
 
 use pyo3::types::{PyBytes, PyString};
 
@@ -124,9 +123,9 @@ impl PyFileLikeObject {
         let arg = if self.is_text_io {
             let s =
                 std::str::from_utf8(buf).expect("Tried to write non-utf8 data to a TextIO object.");
-            PyString::new_bound(py, s).to_object(py)
+            PyString::new(py, s).into_any()
         } else {
-            PyBytes::new_bound(py, buf).to_object(py)
+            PyBytes::new(py, buf).into_any()
         };
 
         let number_bytes_written = inner.call_method1(consts::write(py), (arg,))?;
@@ -240,32 +239,32 @@ mod consts {
     use pyo3::types::PyString;
     use pyo3::{intern, Bound, Py, PyResult, Python};
 
-    pub fn fileno<'py>(py: Python<'py>) -> &'py Bound<PyString> {
+    pub fn fileno(py: Python) -> &Bound<PyString> {
         intern!(py, "fileno")
     }
 
-    pub fn read<'py>(py: Python<'py>) -> &'py Bound<PyString> {
+    pub fn read(py: Python) -> &Bound<PyString> {
         intern!(py, "read")
     }
 
-    pub fn write<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+    pub fn write(py: Python<'_>) -> &Bound<PyString> {
         intern!(py, "write")
     }
 
-    pub fn seek<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+    pub fn seek(py: Python<'_>) -> &Bound<PyString> {
         intern!(py, "seek")
     }
 
-    pub fn flush<'py>(py: Python<'_>) -> &'py Bound<PyString> {
+    pub fn flush(py: Python<'_>) -> &Bound<PyString> {
         intern!(py, "flush")
     }
 
-    pub fn text_io_base<'py>(py: Python<'py>) -> PyResult<&'py Bound<PyAny>> {
+    pub fn text_io_base(py: Python) -> PyResult<&Bound<PyAny>> {
         static INSTANCE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
 
         INSTANCE
             .get_or_try_init(py, || {
-                let io = PyModule::import_bound(py, "io")?;
+                let io = PyModule::import(py, "io")?;
                 let cls = io.getattr("TextIOBase")?;
                 Ok(cls.unbind())
             })
