@@ -1,3 +1,4 @@
+use pyo3::intern;
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
 
@@ -172,6 +173,13 @@ impl PyFileLikeObject {
             inner: self.inner.clone_ref(py),
             is_text_io: self.is_text_io,
         }
+    }
+
+    /// Access the name of the underlying file, if one exists
+    /// https://docs.python.org/3/library/io.html#io.FileIO.name
+    pub fn py_name(&self, py: Python<'_>) -> Option<String> {
+        let py_obj = self.inner.getattr(py, intern!(py, "name")).ok()?;
+        py_obj.extract::<String>(py).ok()
     }
 }
 
