@@ -49,10 +49,8 @@ impl<'py> FromPyObject<'py> for FileOrFileLike {
         }
 
         // is a file-like
-        match PyFileLikeObject::with_requirements(ob.clone().unbind(), true, false, true, false) {
-            Ok(f) => Ok(FileOrFileLike::FileLike(f)),
-            Err(e) => Err(e),
-        }
+        let f = PyFileLikeObject::py_with_requirements(ob.clone(), true, false, true, false)?;
+        Ok(FileOrFileLike::FileLike(f))
     }
 }
 

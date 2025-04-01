@@ -20,10 +20,8 @@ impl<'py> FromPyObject<'py> for FileOrFileLike {
         }
 
         // is a file-like
-        match PyFileLikeObject::with_requirements(ob.clone().unbind(), true, false, true, false) {
-            Ok(f) => Ok(FileOrFileLike::FileLike(f)),
-            Err(e) => Err(e),
-        }
+        let f = PyFileLikeObject::py_with_requirements(ob.clone(), true, false, true, false)?;
+        Ok(FileOrFileLike::FileLike(f))
     }
 }
 
@@ -51,9 +49,9 @@ fn accepts_path_or_file_like_read(path_or_file_like: FileOrFileLike) -> PyResult
 
 #[pyfunction]
 /// Opens a file or file-like, and write a string to it.
-fn accepts_file_like_write(file_like: PyObject) -> PyResult<()> {
+fn accepts_file_like_write(file_like: Bound<PyAny>) -> PyResult<()> {
     // is a file-like
-    match PyFileLikeObject::with_requirements(file_like, false, true, false, false) {
+    match PyFileLikeObject::py_with_requirements(file_like, false, true, false, false) {
         Ok(mut f) => {
             println!("Its a file-like object");
             f.write_all(b"Hello, world!")?;
