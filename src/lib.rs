@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
 
@@ -8,6 +10,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, RawFd};
 
+/// A wrapper around a Python object that implements the file-like interface.
 #[derive(Debug)]
 pub struct PyFileLikeObject {
     // We use PyObject instead of Bound<PyAny> because Bound<PyAny> is a GIL-bound type.
