@@ -29,8 +29,12 @@ impl Clone for PyFileLikeObject {
 /// Wraps a `PyObject`, and implements read, seek, and write for it.
 impl PyFileLikeObject {
     /// Creates an instance of a `PyFileLikeObject` from a `PyObject`.
+    ///
     /// To assert the object has the required methods methods,
-    /// instantiate it with `PyFileLikeObject::require`
+    /// instantiate it with [`with_requirements`][Self::with_requirements].
+    ///
+    /// Prefer using [`py_new`][Self::py_new] if you already have a `Bound<PyAny>` object, as this
+    /// method re-acquires the GIL internally.
     pub fn new(object: PyObject) -> PyResult<Self> {
         Python::with_gil(|py| Self::py_new(object.into_bound(py)))
     }
@@ -38,6 +42,9 @@ impl PyFileLikeObject {
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
     /// python object has a `read`, `write`, and `seek` methods in respect to parameters.
     /// Will return a `TypeError` if object does not have `read`, `seek`, `write` and `fileno` methods.
+    ///
+    /// Prefer using [`py_with_requirements`][Self::py_with_requirements] if you already have a
+    /// `Bound<PyAny>` object, as this method re-acquires the GIL internally.
     pub fn with_requirements(
         object: PyObject,
         read: bool,
@@ -49,9 +56,11 @@ impl PyFileLikeObject {
             Self::py_with_requirements(object.into_bound(py), read, write, seek, fileno)
         })
     }
-}
 
-impl PyFileLikeObject {
+    /// Creates an instance of a `PyFileLikeObject` from a `PyObject`.
+    ///
+    /// Prefer using this instead of [`new`][Self::new] if you already have a `Bound<PyAny>`
+    /// object, as this method does not acquire the GIL internally.
     pub fn py_new(obj: Bound<PyAny>) -> PyResult<Self> {
         let text_io = consts::text_io_base(obj.py())?;
         let is_text_io = obj.is_instance(text_io)?;
@@ -62,6 +71,10 @@ impl PyFileLikeObject {
         })
     }
 
+    /// Creates an instance of a `PyFileLikeObject` from a `PyObject`.
+    ///
+    /// Prefer using this instead of [`with_requirements`][Self::with_requirements] if you already
+    /// have a `Bound<PyAny>` object, as this method does not acquire the GIL internally.
     pub fn py_with_requirements(
         obj: Bound<PyAny>,
         read: bool,
@@ -230,6 +243,12 @@ impl AsRawFd for PyFileLikeObject {
 impl AsRawFd for &PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
         Python::with_gil(|py| self.py_as_raw_fd(py))
+    }
+}
+
+impl<'py> FromPyObject<'py> for PyFileLikeObject {
+    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+        Self::py_new(ob.clone())
     }
 }
 
