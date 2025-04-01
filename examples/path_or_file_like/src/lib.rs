@@ -61,10 +61,21 @@ fn accepts_file_like_write(file_like: Bound<PyAny>) -> PyResult<()> {
     }
 }
 
+#[pyfunction]
+/// Access the name of a file-like object
+fn name_of_file_like(py: Python, file_like: PyObject) -> PyResult<Option<String>> {
+    // is a file-like
+    match PyFileLikeObject::with_requirements(file_like, false, true, false, false) {
+        Ok(f) => Ok(f.py_name(py)),
+        Err(e) => Err(e),
+    }
+}
+
 #[pymodule]
 fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
     m.add_wrapped(wrap_pyfunction!(accepts_file_like_write))?;
+    m.add_wrapped(wrap_pyfunction!(name_of_file_like))?;
 
     Ok(())
 }
