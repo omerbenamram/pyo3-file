@@ -148,8 +148,7 @@ impl PyFileLikeObject {
         let number_bytes_written = inner.call_method1(consts::write(py), (arg,))?;
 
         if number_bytes_written.is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "write() returned None, expected number of bytes written",
             ));
         }
