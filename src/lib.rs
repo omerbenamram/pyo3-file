@@ -17,13 +17,13 @@ pub struct PyFileLikeObject {
     // We use PyObject instead of Bound<PyAny> because Bound<PyAny> is a GIL-bound type.
     // We want to avoid holding the GIL when creating the struct.
     // The GIL will be re-taken when the methods are called.
-    inner: PyObject,
+    inner: Py<PyAny>,
     is_text_io: bool,
 }
 
 impl Clone for PyFileLikeObject {
     fn clone(&self) -> Self {
-        Python::with_gil(|py| PyFileLikeObject {
+        Python::attach(|py| PyFileLikeObject {
             inner: self.inner.clone_ref(py),
             is_text_io: self.is_text_io,
         })
@@ -39,8 +39,8 @@ impl PyFileLikeObject {
     ///
     /// Prefer using [`py_new`][Self::py_new] if you already have a `Bound<PyAny>` object, as this
     /// method re-acquires the GIL internally.
-    pub fn new(object: PyObject) -> PyResult<Self> {
-        Python::with_gil(|py| Self::py_new(object.into_bound(py)))
+    pub fn new(object: Py<PyAny>) -> PyResult<Self> {
+        Python::attach(|py| Self::py_new(object.into_bound(py)))
     }
 
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
@@ -50,13 +50,13 @@ impl PyFileLikeObject {
     /// Prefer using [`py_with_requirements`][Self::py_with_requirements] if you already have a
     /// `Bound<PyAny>` object, as this method re-acquires the GIL internally.
     pub fn with_requirements(
-        object: PyObject,
+        object: Py<PyAny>,
         read: bool,
         write: bool,
         seek: bool,
         fileno: bool,
     ) -> PyResult<Self> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             Self::py_with_requirements(object.into_bound(py), read, write, seek, fileno)
         })
     }
@@ -200,59 +200,59 @@ impl PyFileLikeObject {
 
 impl Read for PyFileLikeObject {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| self.py_read(py, buf))
+        Python::attach(|py| self.py_read(py, buf))
     }
 }
 
 impl Read for &PyFileLikeObject {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| self.py_read(py, buf))
+        Python::attach(|py| self.py_read(py, buf))
     }
 }
 
 impl Write for PyFileLikeObject {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| self.py_write(py, buf))
+        Python::attach(|py| self.py_write(py, buf))
     }
 
     fn flush(&mut self) -> Result<(), io::Error> {
-        Python::with_gil(|py| self.py_flush(py))
+        Python::attach(|py| self.py_flush(py))
     }
 }
 
 impl Write for &PyFileLikeObject {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
-        Python::with_gil(|py| self.py_write(py, buf))
+        Python::attach(|py| self.py_write(py, buf))
     }
 
     fn flush(&mut self) -> Result<(), io::Error> {
-        Python::with_gil(|py| self.py_flush(py))
+        Python::attach(|py| self.py_flush(py))
     }
 }
 
 impl Seek for PyFileLikeObject {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
-        Python::with_gil(|py| self.py_seek(py, pos))
+        Python::attach(|py| self.py_seek(py, pos))
     }
 }
 
 impl Seek for &PyFileLikeObject {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, io::Error> {
-        Python::with_gil(|py| self.py_seek(py, pos))
+        Python::attach(|py| self.py_seek(py, pos))
     }
 }
 
 #[cfg(unix)]
 impl AsRawFd for PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
-        Python::with_gil(|py| self.py_as_raw_fd(py))
+        Python::attach(|py| self.py_as_raw_fd(py))
     }
 }
 
 #[cfg(unix)]
 impl AsRawFd for &PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
-        Python::with_gil(|py| self.py_as_raw_fd(py))
+        Python::attach(|py| self.py_as_raw_fd(py))
     }
 }
 
@@ -264,32 +264,32 @@ impl<'py> FromPyObject<'py> for PyFileLikeObject {
 
 mod consts {
     use pyo3::prelude::*;
-    use pyo3::sync::GILOnceCell;
+    use pyo3::sync::PyOnceLock;
     use pyo3::types::PyString;
     use pyo3::{intern, Bound, Py, PyResult, Python};
 
-    pub fn fileno(py: Python) -> &Bound<PyString> {
+    pub fn fileno(py: Python<'_>) -> &Bound<'_, PyString> {
         intern!(py, "fileno")
     }
 
-    pub fn read(py: Python) -> &Bound<PyString> {
+    pub fn read(py: Python<'_>) -> &Bound<'_, PyString> {
         intern!(py, "read")
     }
 
-    pub fn write(py: Python<'_>) -> &Bound<PyString> {
+    pub fn write(py: Python<'_>) -> &Bound<'_, PyString> {
         intern!(py, "write")
     }
 
-    pub fn seek(py: Python<'_>) -> &Bound<PyString> {
+    pub fn seek(py: Python<'_>) -> &Bound<'_, PyString> {
         intern!(py, "seek")
     }
 
-    pub fn flush(py: Python<'_>) -> &Bound<PyString> {
+    pub fn flush(py: Python<'_>) -> &Bound<'_, PyString> {
         intern!(py, "flush")
     }
 
-    pub fn text_io_base(py: Python) -> PyResult<&Bound<PyAny>> {
-        static INSTANCE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
+    pub fn text_io_base(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static INSTANCE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
         INSTANCE
             .get_or_try_init(py, || {
