@@ -12,15 +12,18 @@ enum FileOrFileLike {
     FileLike(PyFileLikeObject),
 }
 
-impl<'py> FromPyObject<'py> for FileOrFileLike {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'py> FromPyObject<'_, 'py> for FileOrFileLike {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
         // is a path
-        if let Ok(string) = ob.extract::<String>() {
+        if let Ok(string) = obj.extract::<String>() {
             return Ok(FileOrFileLike::File(string));
         }
 
         // is a file-like
-        let f = PyFileLikeObject::py_with_requirements(ob.clone(), true, false, true, false)?;
+        let f =
+            PyFileLikeObject::py_with_requirements(obj.as_any().clone(), true, false, true, false)?;
         Ok(FileOrFileLike::FileLike(f))
     }
 }
@@ -63,7 +66,7 @@ fn accepts_file_like_write(file_like: Bound<PyAny>) -> PyResult<()> {
 
 #[pyfunction]
 /// Access the name of a file-like object
-fn name_of_file_like(py: Python, file_like: PyObject) -> PyResult<Option<String>> {
+fn name_of_file_like(py: Python, file_like: Py<PyAny>) -> PyResult<Option<String>> {
     // is a file-like
     match PyFileLikeObject::with_requirements(file_like, false, true, false, false) {
         Ok(f) => Ok(f.py_name(py)),
