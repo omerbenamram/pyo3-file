@@ -11,7 +11,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3-file = { path = "../../" }
-pyo3 = { version = ">=0.26", features = [
-    "extension-module",
-    "abi3-py37",
-] }
+pyo3 = { version = ">=0.27", features = ["extension-module", "abi3-py37"] }

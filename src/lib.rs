@@ -129,7 +129,9 @@ impl PyFileLikeObject {
             Ok(bytes.len())
         } else {
             let pybytes = inner.call_method1(consts::read(py), (buf.len(),))?;
-            let bytes = pybytes.extract::<Cow<[u8]>>()?;
+            let bytes = pybytes
+                .extract::<Cow<[u8]>>()
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err.to_string()))?;
             buf.write_all(&bytes)?;
             Ok(bytes.len())
         }
@@ -256,9 +258,11 @@ impl AsRawFd for &PyFileLikeObject {
     }
 }
 
-impl<'py> FromPyObject<'py> for PyFileLikeObject {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
-        Self::py_new(ob.clone())
+impl<'py> FromPyObject<'_, 'py> for PyFileLikeObject {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
+        Self::py_new(obj.as_any().clone())
     }
 }
 
