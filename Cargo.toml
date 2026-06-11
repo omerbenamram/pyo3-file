@@ -12,9 +12,3 @@ edition = "2018"
 
 [dependencies]
 pyo3 = { version = "^0.28" }
-
-[dev-dependencies]
-skeptic = "0.13.7"
-
-[build-dependencies]
-skeptic = "0.13.7"

@@ -27,7 +27,6 @@ We could use `pyo3_file` to extend an existing a `pyo3` module.
 
 ```rust
 use pyo3_file::PyFileLikeObject;
-use pyo3::types::PyString;
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -41,15 +40,18 @@ enum FileOrFileLike {
     FileLike(PyFileLikeObject),
 }
 
-impl<'py> FromPyObject<'py> for FileOrFileLike {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'py> FromPyObject<'_, 'py> for FileOrFileLike {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
         // is a path
-        if let Ok(string) = ob.extract::<String>() {
+        if let Ok(string) = obj.extract::<String>() {
             return Ok(FileOrFileLike::File(string));
         }
 
         // is a file-like
-        let f = PyFileLikeObject::py_with_requirements(ob.clone(), true, false, true, false)?;
+        let f =
+            PyFileLikeObject::py_with_requirements(obj.as_any().clone(), true, false, true, false)?;
         Ok(FileOrFileLike::FileLike(f))
     }
 }
@@ -77,7 +79,7 @@ fn accepts_path_or_file_like(path_or_file_like: FileOrFileLike) -> PyResult<Stri
 }
 
 #[pymodule]
-fn path_or_file_like(_py: Python, m: &PyModule) -> PyResult<()> {
+fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like))?;
 
     Ok(())
