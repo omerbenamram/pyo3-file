@@ -88,3 +88,37 @@ fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 # fn main() {}
 ```
+
+## Type stubs
+
+The optional `experimental-inspect` feature turns on `pyo3/experimental-inspect`, so that a
+`PyFileLikeObject` argument is described in PyO3's introspection data and shows up in a generated
+`.pyi` as
+
+```python
+def accepts_file_like(f: _typeshed.SupportsRead[typing.Any] | _typeshed.SupportsWrite[typing.Any]) -> str: ...
+```
+
+instead of the default `_typeshed.Incomplete`, which is `Any` and silently disables checking for
+that parameter.
+
+The hint is deliberately structural. `typing.IO` is a plain class rather than a `Protocol`, so type
+checkers only accept nominal subclasses of it — which would reject `gzip.GzipFile`, custom
+subclasses of `io.RawIOBase`/`io.BufferedIOBase`, and plain objects that just define `.read()`, all
+of which work fine here. The `Any` parameter is also intentional: text streams exchange `str` and
+binary streams exchange `bytes`, and both are supported.
+
+Because one `FromPyObject` impl is shared by every call site, the hint can only say "supports read
+*or* write" — which methods are actually required is a per-call-site decision made through
+`py_with_requirements`. A function that knows it only writes can narrow its own stub:
+
+```rust,ignore
+#[pyfunction]
+#[pyo3(signature = (f: "SupportsWrite[bytes]"))]
+fn write_to(f: PyFileLikeObject) -> PyResult<()> { ... }
+```
+
+Two caveats there. PyO3 emits such an annotation verbatim as a quoted string and does not generate
+an import for the names inside it, so `SupportsWrite` has to be in scope in the generated stub
+already. And Python has no intersection type, so "supports read *and* write" cannot be expressed;
+neither can seek, since `_typeshed` has no `SupportsSeek`.

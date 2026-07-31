@@ -5,6 +5,10 @@ use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
 
 use pyo3::types::{PyBytes, PyString};
+// The `type_hint_*` macros recurse into themselves unqualified, so they have to be in scope by
+// name; a fully qualified `pyo3::type_hint_subscript!(..)` alone does not compile.
+#[cfg(feature = "experimental-inspect")]
+use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -261,8 +265,57 @@ impl AsRawFd for &PyFileLikeObject {
 impl<'py> FromPyObject<'_, 'py> for PyFileLikeObject {
     type Error = PyErr;
 
+    /// The Python type a `PyFileLikeObject` argument is described by in generated type stubs.
+    ///
+    /// Without this the default applies and every file-like argument in every downstream extension
+    /// is `_typeshed.Incomplete`, i.e. `Any`, which silently disables checking for that parameter.
+    ///
+    /// The hint is structural rather than `typing.IO[Any]` on purpose. `typing.IO` is a plain
+    /// class, not a `Protocol`, so type checkers only accept nominal subclasses of it. That
+    /// rejects, at check time, objects this crate handles perfectly at runtime: `gzip.GzipFile`,
+    /// any custom subclass of `io.RawIOBase`/`io.BufferedIOBase`, and any plain object that just
+    /// defines `.read()` — which is the whole point of the crate. `_typeshed.SupportsRead` and
+    /// `_typeshed.SupportsWrite` are protocols, so they accept all of those.
+    ///
+    /// The parameter is `Any`, not `bytes`: [`py_read`][PyFileLikeObject::py_read] and
+    /// [`py_write`][PyFileLikeObject::py_write] branch on whether the object is an
+    /// `io.TextIOBase`, exchanging `str` with text streams and `bytes` with binary ones, so both
+    /// `SupportsRead[str]` and `SupportsRead[bytes]` are legitimate inputs.
+    ///
+    /// The union reads as "supports read *or* write", which is the most that can be said here:
+    /// this impl is shared by every call site, and which methods are actually required is chosen
+    /// per call site via [`py_with_requirements`][PyFileLikeObject::py_with_requirements]. A
+    /// downstream that knows it only writes can narrow the stub at the function itself with
+    /// `#[pyo3(signature = (f: "SupportsWrite[bytes]"))]`. Note that seek is not covered at all —
+    /// `_typeshed` has no `SupportsSeek` — and that Python has no intersection type, so "has read
+    /// *and* write" is not expressible.
+    #[cfg(feature = "experimental-inspect")]
+    const INPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        type_hint_subscript!(
+            type_hint_identifier!("_typeshed", "SupportsRead"),
+            type_hint_identifier!("typing", "Any")
+        ),
+        type_hint_subscript!(
+            type_hint_identifier!("_typeshed", "SupportsWrite"),
+            type_hint_identifier!("typing", "Any")
+        )
+    );
+
     fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
         Self::py_new(obj.as_any().clone())
+    }
+}
+
+#[cfg(all(test, feature = "experimental-inspect"))]
+mod inspect_tests {
+    use super::*;
+
+    #[test]
+    fn input_type_renders_as_a_structural_union() {
+        assert_eq!(
+            <PyFileLikeObject as FromPyObject>::INPUT_TYPE.to_string(),
+            "_typeshed.SupportsRead[typing.Any] | _typeshed.SupportsWrite[typing.Any]"
+        );
     }
 }
 
