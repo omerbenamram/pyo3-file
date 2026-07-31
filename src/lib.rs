@@ -5,6 +5,8 @@ use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
 
 use pyo3::types::{PyBytes, PyString};
+#[cfg(feature = "experimental-inspect")]
+use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -261,8 +263,46 @@ impl AsRawFd for &PyFileLikeObject {
 impl<'py> FromPyObject<'_, 'py> for PyFileLikeObject {
     type Error = PyErr;
 
+    /// The Python type a `PyFileLikeObject` argument is described by in generated type stubs.
+    ///
+    /// The hint is structural rather than `typing.IO[Any]` on purpose. `typing.IO` is a plain
+    /// class, not a `Protocol`, so type checkers only accept nominal subclasses of it. That
+    /// rejects, at check time, objects this crate handles perfectly at runtime: `gzip.GzipFile`,
+    /// any custom subclass of `io.RawIOBase`/`io.BufferedIOBase`, and any plain object that just
+    /// defines `.read()` — which is the whole point of the crate. `_typeshed.SupportsRead` and
+    /// `_typeshed.SupportsWrite` are protocols, so they accept all of those.
+    ///
+    /// The parameter is `Any`, not `bytes`: [`py_read`][PyFileLikeObject::py_read] and
+    /// [`py_write`][PyFileLikeObject::py_write] branch on whether the object is an
+    /// `io.TextIOBase`, exchanging `str` with text streams and `bytes` with binary ones, so both
+    /// `SupportsRead[str]` and `SupportsRead[bytes]` are legitimate inputs.
+    #[cfg(feature = "experimental-inspect")]
+    const INPUT_TYPE: pyo3::inspect::PyStaticExpr = type_hint_union!(
+        type_hint_subscript!(
+            type_hint_identifier!("_typeshed", "SupportsRead"),
+            type_hint_identifier!("typing", "Any")
+        ),
+        type_hint_subscript!(
+            type_hint_identifier!("_typeshed", "SupportsWrite"),
+            type_hint_identifier!("typing", "Any")
+        )
+    );
+
     fn extract(obj: Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
         Self::py_new(obj.as_any().clone())
+    }
+}
+
+#[cfg(all(test, feature = "experimental-inspect"))]
+mod inspect_tests {
+    use super::*;
+
+    #[test]
+    fn input_type_renders_as_a_structural_union() {
+        assert_eq!(
+            <PyFileLikeObject as FromPyObject>::INPUT_TYPE.to_string(),
+            "_typeshed.SupportsRead[typing.Any] | _typeshed.SupportsWrite[typing.Any]"
+        );
     }
 }
 

@@ -12,3 +12,6 @@ edition = "2018"
 
 [dependencies]
 pyo3 = { version = "^0.29" }
+
+[features]
+experimental-inspect = ["pyo3/experimental-inspect"]
