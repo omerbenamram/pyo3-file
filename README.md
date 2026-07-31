@@ -122,3 +122,41 @@ Two caveats there. PyO3 emits such an annotation verbatim as a quoted string and
 an import for the names inside it, so `SupportsWrite` has to be in scope in the generated stub
 already. And Python has no intersection type, so "supports read *and* write" cannot be expressed;
 neither can seek, since `_typeshed` has no `SupportsSeek`.
+
+### Declaring requirements in the type
+
+`PyFileLike<READ, WRITE, SEEK, FILENO>` puts the four flags that `py_with_requirements` takes into
+the type itself, so a single declaration drives the runtime check, the available Rust traits, and
+the stub annotation together instead of leaving them to be kept in sync by hand. Aliases are
+provided for the usual combinations:
+
+```rust,ignore
+use pyo3_file::PySeekableReadFile;
+
+#[pyfunction]
+fn parse(mut f: PySeekableReadFile) -> PyResult<Stats> {
+    f.seek(SeekFrom::End(-8))?; // `Seek` is available because SEEK is true
+    ...
+}
+```
+
+Extraction rejects an object missing any required method, exactly as `py_with_requirements` would.
+Only the requested `std::io` traits are implemented, so calling `read` on a write-only file is a
+compile error rather than a runtime `TypeError`. And the stub gets the most precise annotation the
+requirement admits:
+
+| requirement | annotation |
+| --- | --- |
+| read | `_typeshed.SupportsRead[typing.Any]` |
+| write | `_typeshed.SupportsWrite[typing.Any]` |
+| fileno | `_typeshed.HasFileno` |
+| nothing | `_typeshed.SupportsRead[typing.Any] \| _typeshed.SupportsWrite[typing.Any]` |
+| anything else | `io.IOBase \| typing.IO[typing.Any]` |
+
+The last row is the limit of what Python's type system can state: there is no intersection type, so
+"supports read *and* write" is not expressible, and `_typeshed` has no `SupportsSeek`. Those cases
+fall back to a union of the two nominal file base types, which together cover every file object in
+the standard library — `io.IOBase` catches `gzip.GzipFile` and custom `RawIOBase`/`BufferedIOBase`
+subclasses that `typing.IO` rejects, and `typing.IO` catches `tempfile.NamedTemporaryFile`, which
+`io.IOBase` rejects. Being nominal, neither accepts a plain duck-typed object, so those combinations
+are less permissive than the crate is at runtime.

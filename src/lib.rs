@@ -15,6 +15,13 @@ use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, RawFd};
 
+mod typed;
+
+pub use typed::{
+    PyFileLike, PyReadFile, PySeekableReadFile, PySeekableReadWriteFile, PySeekableWriteFile,
+    PyWriteFile,
+};
+
 /// A wrapper around a Python object that implements the file-like interface.
 #[derive(Debug)]
 pub struct PyFileLikeObject {
