@@ -12,3 +12,10 @@ edition = "2018"
 
 [dependencies]
 pyo3 = { version = "^0.29" }
+
+[features]
+# Describe the conversion in PyO3's introspection data, so that a `PyFileLikeObject` argument shows
+# up as `SupportsRead[Any] | SupportsWrite[Any]` in a generated stub file instead of
+# `_typeshed.Incomplete`. Opt-in and additive: it only turns on `pyo3/experimental-inspect`, which
+# is itself experimental, and costs nothing when off.
+experimental-inspect = ["pyo3/experimental-inspect"]
