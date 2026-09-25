@@ -29,6 +29,9 @@ jobs:
       - name: Run crate tests (includes skeptic README examples)
         run: cargo test
 
+      - name: Run crate tests with experimental-inspect
+        run: cargo test --features experimental-inspect
+
       - name: Build example wheel
         uses: PyO3/maturin-action@v1
         with:
