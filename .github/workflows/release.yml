@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  # auto-tag.yml dispatches this on the tag it pushes (its tag push doesn't trigger workflows).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,6 +20,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check tag matches Cargo.toml
+        run: |
+          CRATE="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          [ "$CRATE" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != Cargo.toml $CRATE"; exit 1; }
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -25,3 +32,17 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish
+
+  # Its own job, so re-running it after a failure doesn't publish the crate again.
+  github-release:
+    name: Create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # CHANGELOG.md points at the GitHub releases for the notes.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
