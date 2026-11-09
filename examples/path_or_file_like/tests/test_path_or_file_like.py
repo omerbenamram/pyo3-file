@@ -98,6 +98,40 @@ def test_bytes_that_are_not_utf8_are_an_error_for_a_text_object(data):
         write_buffered(io.StringIO(), data, 0)
 
 
+def test_text_that_ends_inside_a_character_is_an_error_at_flush():
+    f = io.StringIO()
+    with pytest.raises(OSError, match="end inside a character"):
+        write_buffered(f, b"abc\xe6\x97", 0)
+    assert f.getvalue() == "abc"
+
+
+def test_a_failed_text_write_can_be_retried():
+    class Flaky(io.StringIO):
+        failed = False
+
+        def write(self, text):
+            # Fails once, on the write that completes the character split before it.
+            if "\u65e5" in text and not self.failed:
+                self.failed = True
+                raise InterruptedError
+            return super().write(text)
+
+    f = Flaky()
+    # `write_all` writes again after an interruption.
+    write_buffered(f, "a\u65e5b".encode(), 2)
+    assert f.failed
+    assert f.getvalue() == "a\u65e5b"
+
+
+def test_it_fails_when_a_text_write_is_short():
+    class Short(io.StringIO):
+        def write(self, text):
+            return super().write(text[:1])
+
+    with pytest.raises(OSError, match=r"write\(\) of 13 characters returned 1"):
+        accepts_file_like_write(Short())
+
+
 def test_it_fails_when_write_returns_more_than_it_was_given():
     class FileLike:
         def write(self, _data):

@@ -28,7 +28,10 @@ pub struct PyFileLikeObject {
 }
 
 /// A text stream takes and gives whole characters, and `Read` and `Write` work in bytes, which
-/// can stop inside a character's UTF-8 encoding.
+/// can stop inside a character's UTF-8 encoding. The bytes in between belong to this wrapper
+/// and its clones: another wrapper of the same Python object, or Python code using the object,
+/// doesn't see them, and threads that read or write one text stream at once mix them up, as
+/// they would the stream.
 #[derive(Debug, Default)]
 struct TextBuffers {
     /// Bytes of characters read from the stream that the caller's buffer had no room for.
@@ -144,9 +147,13 @@ impl PyFileLikeObject {
                 let chars = (buf.len() / 4).max(1);
                 let res = inner.call_method1(consts::read(py), (chars,))?;
                 let rust_string = res.extract::<Cow<str>>()?;
-                self.text_buffers()
-                    .read
-                    .extend_from_slice(rust_string.as_bytes());
+                let bytes = rust_string.as_bytes();
+                if let Some(dest) = buf.get_mut(..bytes.len()) {
+                    dest.copy_from_slice(bytes);
+                    return Ok(bytes.len());
+                }
+                // A buffer of under four bytes, and a character longer than it.
+                self.text_buffers().read.extend_from_slice(bytes);
             }
             let mut text = self.text_buffers();
             let len = text.read.len().min(buf.len());
@@ -202,8 +209,11 @@ impl PyFileLikeObject {
                 ));
             }
             if !valid.is_empty() {
-                // A text stream writes all of a string or raises.
-                inner.call_method1(consts::write(py), (PyString::new(py, valid),))?;
+                if let Err(e) = self.write_text(inner, valid) {
+                    // Nothing of `buf` was taken, so the caller may write it again.
+                    self.text_buffers().written = before;
+                    return Err(e);
+                }
             }
             // Invalid bytes are left to the next write, which fails on them. Otherwise what
             // follows the characters written is the start of a character, to keep.
@@ -231,13 +241,42 @@ impl PyFileLikeObject {
         Ok(written)
     }
 
+    /// Writes `text` to a text stream, which takes all of a string or raises.
+    fn write_text(&self, inner: &Bound<'_, PyAny>, text: &str) -> io::Result<()> {
+        let py = inner.py();
+        let written = inner.call_method1(consts::write(py), (PyString::new(py, text),))?;
+        if written.is_none() {
+            return Err(io::Error::other(
+                "write() returned None, expected number of characters written",
+            ));
+        }
+        let written: usize = written.extract().map_err(io::Error::from)?;
+        let chars = text.chars().count();
+        if written != chars {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("write() of {chars} characters returned {written}"),
+            ));
+        }
+        Ok(())
+    }
+
     fn text_buffers(&self) -> MutexGuard<'_, TextBuffers> {
         // A panic while it was held left the buffers usable.
         self.text.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Calls the object's `flush()`. For a text stream, bytes written last that stop inside a
+    /// character are an [`io::ErrorKind::InvalidData`] error: they can't be flushed, and are
+    /// still written if the rest of the character follows.
     pub fn py_flush(&self, py: Python<'_>) -> io::Result<()> {
         self.inner.call_method0(py, consts::flush(py))?;
+        if self.is_text_io && !self.text_buffers().written.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "the bytes written to a text stream end inside a character",
+            ));
+        }
         Ok(())
     }
 
@@ -250,8 +289,11 @@ impl PyFileLikeObject {
         };
 
         let res = inner.call_method1(consts::seek(py), (offset, whence))?;
-        // What was read ahead of the old position isn't what is at the new one.
-        self.text_buffers().read.clear();
+        // Bytes read ahead of the old position, or written short of a character at it, don't
+        // belong to the new one. Asking for the position moves nothing.
+        if self.is_text_io && pos != SeekFrom::Current(0) {
+            *self.text_buffers() = TextBuffers::default();
+        }
         res.extract().map_err(io::Error::from)
     }
 
