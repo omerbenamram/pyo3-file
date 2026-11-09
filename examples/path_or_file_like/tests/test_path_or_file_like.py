@@ -6,6 +6,8 @@ from path_or_file_like import (
     accepts_file_like_write,
     accepts_path_or_file_like_read,
     name_of_file_like,
+    read_exact_in_steps,
+    write_buffered,
 )
 
 
@@ -70,3 +72,51 @@ def test_file_name_from_path(small_sample: str):
 def test_file_name_from_textio():
     f = io.StringIO()
     assert name_of_file_like(f) is None
+
+
+TEXT = "h\u00e9llo, \u65e5\u672c\u8a9e \U0001f600 w\u00f6rld"
+
+
+@pytest.mark.parametrize("buffer_size", [0, 1, 2, 3, 4, 5, 7, 64])
+def test_it_writes_non_ascii_text_wherever_the_buffer_splits_it(buffer_size):
+    # A buffered writer hands bytes on at any offset, inside a character's encoding too.
+    f = io.StringIO()
+    write_buffered(f, TEXT.encode(), buffer_size)
+    assert f.getvalue() == TEXT
+
+
+@pytest.mark.parametrize("buffer_size", [0, 1, 4, 64])
+def test_it_writes_non_ascii_bytes_to_a_binary_object(buffer_size):
+    f = io.BytesIO()
+    write_buffered(f, TEXT.encode(), buffer_size)
+    assert f.getvalue() == TEXT.encode()
+
+
+@pytest.mark.parametrize("data", [b"\xff", b"ok \xff more", b"\xe6\x97 x"])
+def test_bytes_that_are_not_utf8_are_an_error_for_a_text_object(data):
+    with pytest.raises(OSError, match="not UTF-8"):
+        write_buffered(io.StringIO(), data, 0)
+
+
+def test_it_fails_when_write_returns_more_than_it_was_given():
+    class FileLike:
+        def write(self, _data):
+            return 100
+
+    with pytest.raises(OSError, match=r"write\(\) of 13 bytes returned 100"):
+        accepts_file_like_write(FileLike())
+
+
+@pytest.mark.parametrize("step", [1, 2, 3, 4, 5, 1000])
+def test_it_reads_text_into_buffers_of_any_size(step):
+    data = TEXT.encode()
+    assert read_exact_in_steps(io.StringIO(TEXT), len(data), step) == data
+
+
+def test_it_fails_when_read_returns_more_than_asked():
+    class FileLike:
+        def read(self, _size):
+            return b"12345678"
+
+    with pytest.raises(OSError, match=r"read\(4\) returned 8 bytes"):
+        read_exact_in_steps(FileLike(), 4, 4)

@@ -12,6 +12,7 @@ use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, RawFd};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 /// A wrapper around a Python object that implements the file-like interface.
 #[derive(Debug)]
@@ -21,14 +22,24 @@ pub struct PyFileLikeObject {
     // The GIL will be re-taken when the methods are called.
     inner: Py<PyAny>,
     is_text_io: bool,
+    /// The bytes of a text stream that are between the two sides. Clones share them, as they
+    /// share the stream.
+    text: Arc<Mutex<TextBuffers>>,
+}
+
+/// A text stream takes and gives whole characters, and `Read` and `Write` work in bytes, which
+/// can stop inside a character's UTF-8 encoding.
+#[derive(Debug, Default)]
+struct TextBuffers {
+    /// Bytes of characters read from the stream that the caller's buffer had no room for.
+    read: Vec<u8>,
+    /// The first bytes of a character whose other bytes the caller has yet to write.
+    written: Vec<u8>,
 }
 
 impl Clone for PyFileLikeObject {
     fn clone(&self) -> Self {
-        Python::attach(|py| PyFileLikeObject {
-            inner: self.inner.clone_ref(py),
-            is_text_io: self.is_text_io,
-        })
+        Python::attach(|py| self.py_clone(py))
     }
 }
 
@@ -74,6 +85,7 @@ impl PyFileLikeObject {
         Ok(PyFileLikeObject {
             inner: obj.unbind(),
             is_text_io,
+            text: Arc::default(),
         })
     }
 
@@ -115,41 +127,93 @@ impl PyFileLikeObject {
         PyFileLikeObject::py_new(obj)
     }
 
-    pub fn py_read(&self, py: Python<'_>, mut buf: &mut [u8]) -> io::Result<usize> {
+    /// Reads into `buf` with the object's `read()`.
+    ///
+    /// A text stream (an `io.TextIOBase`) is read as the UTF-8 encoding of its characters. A
+    /// character that `buf` has no room for is kept for the next read, so `buf` can be of any
+    /// size.
+    pub fn py_read(&self, py: Python<'_>, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         let inner = self.inner.bind(py);
         if self.is_text_io {
-            if buf.len() < 4 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "buffer size must be at least 4 bytes",
-                ));
+            // The buffers aren't locked while Python runs: its code can let another thread in.
+            if self.text_buffers().read.is_empty() {
+                // A character is at most four bytes.
+                let chars = (buf.len() / 4).max(1);
+                let res = inner.call_method1(consts::read(py), (chars,))?;
+                let rust_string = res.extract::<Cow<str>>()?;
+                self.text_buffers()
+                    .read
+                    .extend_from_slice(rust_string.as_bytes());
             }
-            let res = inner.call_method1(consts::read(py), (buf.len() / 4,))?;
-            let rust_string = res.extract::<Cow<str>>()?;
-            let bytes = rust_string.as_bytes();
-            buf.write_all(bytes)?;
-            Ok(bytes.len())
+            let mut text = self.text_buffers();
+            let len = text.read.len().min(buf.len());
+            buf[..len].copy_from_slice(&text.read[..len]);
+            text.read.drain(..len);
+            Ok(len)
         } else {
             let pybytes = inner.call_method1(consts::read(py), (buf.len(),))?;
             let bytes = pybytes
                 .extract::<Cow<[u8]>>()
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err.to_string()))?;
-            buf.write_all(&bytes)?;
+            let Some(dest) = buf.get_mut(..bytes.len()) else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("read({}) returned {} bytes", buf.len(), bytes.len()),
+                ));
+            };
+            dest.copy_from_slice(&bytes);
             Ok(bytes.len())
         }
     }
 
+    /// Writes `buf` with the object's `write()`, and returns how many of its bytes were taken.
+    ///
+    /// A text stream (an `io.TextIOBase`) is written the characters that `buf` encodes as UTF-8.
+    /// `buf` may end inside a character, as a buffered writer's does: those bytes are kept
+    /// until the rest of the character is written. Bytes that aren't UTF-8 are an
+    /// [`io::ErrorKind::InvalidData`] error.
     pub fn py_write(&self, py: Python<'_>, buf: &[u8]) -> io::Result<usize> {
         let inner = self.inner.bind(py);
-        let arg = if self.is_text_io {
-            let s =
-                std::str::from_utf8(buf).expect("Tried to write non-utf8 data to a TextIO object.");
-            PyString::new(py, s).into_any()
-        } else {
-            PyBytes::new(py, buf).into_any()
-        };
+        if self.is_text_io {
+            // The bytes kept from the write before come first. The buffers aren't locked while
+            // Python runs: its code can let another thread in.
+            let before = std::mem::take(&mut self.text_buffers().written);
+            let kept = before.len();
+            let bytes: Cow<[u8]> = if kept == 0 {
+                Cow::Borrowed(buf)
+            } else {
+                Cow::Owned([&before[..], buf].concat())
+            };
+            let (valid, invalid) = match std::str::from_utf8(&bytes) {
+                Ok(s) => (s, false),
+                Err(e) => (
+                    // Its first `valid_up_to` bytes are UTF-8.
+                    std::str::from_utf8(&bytes[..e.valid_up_to()]).unwrap_or_default(),
+                    e.error_len().is_some(),
+                ),
+            };
+            if valid.is_empty() && invalid {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "tried to write bytes that are not UTF-8 to a text stream",
+                ));
+            }
+            if !valid.is_empty() {
+                // A text stream writes all of a string or raises.
+                inner.call_method1(consts::write(py), (PyString::new(py, valid),))?;
+            }
+            // Invalid bytes are left to the next write, which fails on them. Otherwise what
+            // follows the characters written is the start of a character, to keep.
+            let taken = if invalid { valid.len() } else { bytes.len() };
+            self.text_buffers().written = bytes[valid.len()..taken].to_vec();
+            return Ok(taken - kept);
+        }
 
-        let number_bytes_written = inner.call_method1(consts::write(py), (arg,))?;
+        let number_bytes_written =
+            inner.call_method1(consts::write(py), (PyBytes::new(py, buf),))?;
 
         if number_bytes_written.is_none() {
             return Err(io::Error::other(
@@ -157,7 +221,19 @@ impl PyFileLikeObject {
             ));
         }
 
-        number_bytes_written.extract().map_err(io::Error::from)
+        let written: usize = number_bytes_written.extract().map_err(io::Error::from)?;
+        if written > buf.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("write() of {} bytes returned {written}", buf.len()),
+            ));
+        }
+        Ok(written)
+    }
+
+    fn text_buffers(&self) -> MutexGuard<'_, TextBuffers> {
+        // A panic while it was held left the buffers usable.
+        self.text.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     pub fn py_flush(&self, py: Python<'_>) -> io::Result<()> {
@@ -174,6 +250,8 @@ impl PyFileLikeObject {
         };
 
         let res = inner.call_method1(consts::seek(py), (offset, whence))?;
+        // What was read ahead of the old position isn't what is at the new one.
+        self.text_buffers().read.clear();
         res.extract().map_err(io::Error::from)
     }
 
@@ -191,6 +269,7 @@ impl PyFileLikeObject {
         PyFileLikeObject {
             inner: self.inner.clone_ref(py),
             is_text_io: self.is_text_io,
+            text: Arc::clone(&self.text),
         }
     }
 
