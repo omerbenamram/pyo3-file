@@ -205,6 +205,8 @@ impl PyFileLikeObject {
                 ),
             };
             if valid.is_empty() && invalid {
+                // The bytes kept are part of what is refused.
+                self.text_buffers().written.clear();
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "tried to write bytes that are not UTF-8 to a text stream",
