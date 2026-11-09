@@ -34,9 +34,11 @@ pub struct PyFileLikeObject {
 /// they would the stream.
 #[derive(Debug, Default)]
 struct TextBuffers {
-    /// Bytes of characters read from the stream that the caller's buffer had no room for.
+    /// Bytes of a character read from the stream that the caller's buffer had no room for: at
+    /// most four.
     read: Vec<u8>,
-    /// The first bytes of a character whose other bytes the caller has yet to write.
+    /// The first bytes of a character whose other bytes the caller has yet to write: at most
+    /// three.
     written: Vec<u8>,
 }
 
@@ -187,7 +189,7 @@ impl PyFileLikeObject {
         if self.is_text_io {
             // The bytes kept from the write before come first. The buffers aren't locked while
             // Python runs: its code can let another thread in.
-            let before = std::mem::take(&mut self.text_buffers().written);
+            let before = self.text_buffers().written.clone();
             let kept = before.len();
             let bytes: Cow<[u8]> = if kept == 0 {
                 Cow::Borrowed(buf)
@@ -209,11 +211,8 @@ impl PyFileLikeObject {
                 ));
             }
             if !valid.is_empty() {
-                if let Err(e) = self.write_text(inner, valid) {
-                    // Nothing of `buf` was taken, so the caller may write it again.
-                    self.text_buffers().written = before;
-                    return Err(e);
-                }
+                // If it fails, the bytes kept stay kept, and the caller may write `buf` again.
+                self.write_text(inner, valid)?;
             }
             // Invalid bytes are left to the next write, which fails on them. Otherwise what
             // follows the characters written is the start of a character, to keep.

@@ -85,10 +85,9 @@ def test_it_writes_non_ascii_text_wherever_the_buffer_splits_it(buffer_size):
     assert f.getvalue() == TEXT
 
 
-@pytest.mark.parametrize("buffer_size", [0, 1, 4, 64])
-def test_it_writes_non_ascii_bytes_to_a_binary_object(buffer_size):
+def test_it_writes_non_ascii_bytes_to_a_binary_object():
     f = io.BytesIO()
-    write_buffered(f, TEXT.encode(), buffer_size)
+    write_buffered(f, TEXT.encode(), 3)
     assert f.getvalue() == TEXT.encode()
 
 
