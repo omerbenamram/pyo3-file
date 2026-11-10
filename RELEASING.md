@@ -10,8 +10,8 @@
 
 1. Pick the version. While on 0.x, a breaking change (a new major `pyo3` counts) or a new
    feature bumps the minor version and fixes alone bump the patch version.
-2. Open a `chore(release): X.Y.Z` PR that bumps `version` in `Cargo.toml` and refreshes
-   `Cargo.lock`.
+2. Open a `chore(release): X.Y.Z` PR that bumps `version` in `Cargo.toml` (`Cargo.lock` is not
+   tracked).
 3. Merge it.
 
 The merge runs `.github/workflows/auto-tag.yml`. It sees a `Cargo.toml` version with no tag,
