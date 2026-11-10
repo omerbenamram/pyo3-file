@@ -83,7 +83,9 @@ Use plain words and full sentences: short ones, one idea each, in the active voi
 - `cargo test`. It also runs the first Rust example in `README.md` as a doc test. Nothing runs the other examples there.
 - `cargo test --features experimental-inspect`
 - The example: `maturin build -m examples/path_or_file_like/Cargo.toml -o target/wheels`, then `pip install --force-reinstall target/wheels/*.whl pytest`, then `pytest` in `examples/path_or_file_like`. The wheel always has the same version, so without `--force-reinstall` pip keeps the old build.
-- `cargo fmt -- --check`, and `cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml -- --check` for the example, which is a separate package. CI does not run clippy here.
+- `cargo fmt -- --check`, and `cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml -- --check` for the example, which is a separate package.
+
+CI does not run clippy here.
 
 ### Code rules
 
