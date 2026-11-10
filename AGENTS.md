@@ -44,7 +44,7 @@ Each fix or feature gets its own pull request, so that it can be reviewed, descr
 5. **CI.** Every check is green. Fix the cause of a red check. Do not skip, disable or loosen a test to get there.
 6. **Merge.** Merge the pull request yourself. Do not wait for Omer. The exception is a `chore(release)` pull request, which merges only when he tells you to.
 
-Open the pull request as soon as the change is built, so that CI and Bugbot run while you review. If a review did not run, say so in the pull request and leave it open.
+Before you push, run the checks in "This repository" that match what you changed. A change to these instruction files alone needs none. Open the pull request as soon as the change is built, so that CI and Bugbot run while you review. If a review did not run, say so in the pull request and leave it open.
 
 A cloud session cannot re-run or dispatch a GitHub Actions job: the API answers 403. When a job failed for a reason outside the change, such as a runner or a network fault, check whether `master` has moved since. If it has, merging it into the branch starts a new run. If it has not, tell Omer which job needs a re-run, and carry on with other work while you wait.
 
@@ -78,19 +78,17 @@ Use plain words and full sentences: short ones, one idea each, in the active voi
 
 ### Checks
 
-`.github/workflows/ci.yml` runs these on every pull request and on `master`. Before you push, run the ones that match what you changed. A change to these instruction files alone needs none.
+`.github/workflows/ci.yml` runs these on every pull request and on `master`, except the format check.
 
 - `cargo test`. It also runs the first Rust example in `README.md` as a doc test. Nothing runs the other examples there.
 - `cargo test --features experimental-inspect`
 - The example: `maturin build -m examples/path_or_file_like/Cargo.toml -o target/wheels`, then `pip install --force-reinstall target/wheels/*.whl pytest`, then `pytest` in `examples/path_or_file_like`. The wheel always has the same version, so without `--force-reinstall` pip keeps the old build.
-
-CI does not run rustfmt or clippy here. The tree is rustfmt-clean, so keep it that way with `cargo fmt`, and with `cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml` for the example, which is a separate package.
+- `cargo fmt`, and `cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml` for the example, which is a separate package. CI does not run rustfmt or clippy here, and the tree is rustfmt-clean.
 
 ### Code rules
 
-- A Python object can raise from any method, return the wrong type, or return more or fewer bytes than asked. None of that may make the crate panic or corrupt data: return an `io::Error`. The one deliberate panic is in `as_raw_fd`, because `AsRawFd::as_raw_fd` cannot return an error. Its doc comment explains it, and `try_as_raw_fd` is the form that returns the error.
-- A new major version of PyO3 is a breaking change for users, so it bumps the minor version while the crate is on 0.x.
-- This repository keeps no changelog entries: `CHANGELOG.md` only points to the GitHub releases, so leave it as it is. The release notes are generated from the titles of the merged pull requests, so write each title for a user of the crate.
+- A Python object can raise from any method, return the wrong type, or return more or fewer bytes than asked. None of that may make the crate panic or corrupt data: return an `io::Error`. The one deliberate panic is in `as_raw_fd`, because `AsRawFd::as_raw_fd` cannot return an error; `try_as_raw_fd` is the form that returns it.
+- `CHANGELOG.md` only points to the GitHub releases: add no entries. The release notes are generated from the titles of the merged pull requests, so write each title for a user of the crate.
 
 ## Editing these instructions
 
