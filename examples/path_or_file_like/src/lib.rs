@@ -3,7 +3,7 @@ use pyo3_file::PyFileLikeObject;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 
 /// Represents either a path `File` or a file-like object `FileLike`
 #[derive(Debug)]
@@ -74,11 +74,35 @@ fn name_of_file_like(py: Python, file_like: Py<PyAny>) -> PyResult<Option<String
     }
 }
 
+#[pyfunction]
+/// Writes `data` to a file-like through a buffer of `buffer_size` bytes, which hands the bytes
+/// on wherever it fills up.
+fn write_buffered(file_like: Bound<PyAny>, data: Vec<u8>, buffer_size: usize) -> PyResult<()> {
+    let f = PyFileLikeObject::py_with_requirements(file_like, false, true, false, false)?;
+    let mut writer = BufWriter::with_capacity(buffer_size, f);
+    writer.write_all(&data)?;
+    writer.flush()?;
+    Ok(())
+}
+
+#[pyfunction]
+/// Reads exactly `len` bytes from a file-like, in reads of at most `step` bytes.
+fn read_exact_in_steps(file_like: Bound<PyAny>, len: usize, step: usize) -> PyResult<Vec<u8>> {
+    let mut f = PyFileLikeObject::py_with_requirements(file_like, true, false, false, false)?;
+    let mut data = vec![0; len];
+    for part in data.chunks_mut(step.max(1)) {
+        f.read_exact(part)?;
+    }
+    Ok(data)
+}
+
 #[pymodule]
 fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
     m.add_wrapped(wrap_pyfunction!(accepts_file_like_write))?;
     m.add_wrapped(wrap_pyfunction!(name_of_file_like))?;
+    m.add_wrapped(wrap_pyfunction!(write_buffered))?;
+    m.add_wrapped(wrap_pyfunction!(read_exact_in_steps))?;
 
     Ok(())
 }
