@@ -98,11 +98,12 @@ fn read_exact_in_steps(file_like: Bound<PyAny>, len: usize, step: usize) -> PyRe
 
 #[cfg(unix)]
 #[pyfunction]
-/// The file descriptor of a file-like, as `AsRawFd` gives it: `-1` when it has none.
+/// The file descriptor of a file-like that must have one, as `AsRawFd` gives it.
 fn raw_fd(file_like: Bound<PyAny>) -> PyResult<i32> {
     use std::os::fd::AsRawFd;
 
-    Ok(PyFileLikeObject::py_new(file_like)?.as_raw_fd())
+    let file = PyFileLikeObject::py_with_requirements(file_like, false, false, false, true)?;
+    Ok(file.as_raw_fd())
 }
 
 #[cfg(unix)]

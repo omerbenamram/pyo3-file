@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 
 import pytest
+import path_or_file_like
 from path_or_file_like import (
     accepts_file_like_write,
     accepts_path_or_file_like_read,
@@ -155,66 +156,59 @@ def test_it_fails_when_read_returns_more_than_asked():
         read_exact_in_steps(FileLike(), 4, 4)
 
 
-
-def fd_functions():
-    """`raw_fd` and `try_raw_fd`, which the example only has on Unix."""
-    module = pytest.importorskip("path_or_file_like")
-    if not hasattr(module, "raw_fd"):
-        pytest.skip("file descriptors are Unix only")
-    return module.raw_fd, module.try_raw_fd
+unix_only = pytest.mark.skipif(
+    not hasattr(path_or_file_like, "raw_fd"), reason="file descriptors are Unix only"
+)
+# `raw_fd` requires a descriptor when it wraps the object; `try_raw_fd` asks for it later.
+fd_function = pytest.mark.parametrize("fd", ["raw_fd", "try_raw_fd"])
 
 
-def test_it_gives_the_descriptor_of_a_real_file(small_sample):
-    raw_fd, try_raw_fd = fd_functions()
-    with open(small_sample, "rb") as o:
-        assert raw_fd(o) == o.fileno()
-        assert try_raw_fd(o) == o.fileno()
-    with open(small_sample, "rt") as o:
-        assert raw_fd(o) == o.fileno()
-        assert try_raw_fd(o) == o.fileno()
+@unix_only
+@fd_function
+def test_it_gives_the_descriptor_of_a_real_file(small_sample, fd):
+    for mode in ["rb", "rt"]:
+        with open(small_sample, mode) as o:
+            assert getattr(path_or_file_like, fd)(o) == o.fileno()
 
 
-@pytest.mark.parametrize("file_like", [io.BytesIO(b"data"), io.StringIO("text")])
-def test_an_object_without_a_descriptor_is_minus_one_or_an_error(file_like):
-    raw_fd, try_raw_fd = fd_functions()
-    # It used to panic.
-    assert raw_fd(file_like) == -1
+@unix_only
+@fd_function
+@pytest.mark.parametrize("make", [lambda: io.BytesIO(b"data"), lambda: io.StringIO("text")])
+def test_an_object_without_a_descriptor_is_an_error(make, fd):
+    # Asking such an object for its descriptor used to panic.
     with pytest.raises(io.UnsupportedOperation, match="fileno"):
-        try_raw_fd(file_like)
+        getattr(path_or_file_like, fd)(make())
 
 
-def test_an_object_without_fileno_is_minus_one_or_an_error():
-    raw_fd, try_raw_fd = fd_functions()
+@unix_only
+@fd_function
+def test_a_closed_file_is_an_error(small_sample, fd):
+    o = open(small_sample, "rb")
+    o.close()
+    with pytest.raises(ValueError, match="closed file"):
+        getattr(path_or_file_like, fd)(o)
 
+
+@unix_only
+@pytest.mark.parametrize(
+    "fd, error", [("raw_fd", TypeError), ("try_raw_fd", AttributeError)]
+)
+def test_an_object_without_fileno_is_an_error(fd, error):
     class FileLike:
         def read(self, _size):
             return b""
 
-    assert raw_fd(FileLike()) == -1
-    with pytest.raises(AttributeError, match="fileno"):
-        try_raw_fd(FileLike())
+    with pytest.raises(error, match="fileno"):
+        getattr(path_or_file_like, fd)(FileLike())
 
 
-@pytest.mark.parametrize("value", [-1, -7, 2**40, "3", None, 1.5])
-def test_a_fileno_that_is_not_a_descriptor_is_minus_one_or_an_error(value):
-    raw_fd, try_raw_fd = fd_functions()
-
+@unix_only
+@fd_function
+@pytest.mark.parametrize("value", [-1, -7, 2**40, "3", None, 1.5, True])
+def test_a_fileno_that_is_not_a_descriptor_is_an_error(value, fd):
     class FileLike:
         def fileno(self):
             return value
 
-    assert raw_fd(FileLike()) == -1
     with pytest.raises(OSError, match=r"fileno\(\) returned .*, expected a file descriptor"):
-        try_raw_fd(FileLike())
-
-
-def test_a_fileno_that_raises_is_minus_one_or_its_error():
-    raw_fd, try_raw_fd = fd_functions()
-
-    class Closed:
-        def fileno(self):
-            raise ValueError("I/O operation on closed file")
-
-    assert raw_fd(Closed()) == -1
-    with pytest.raises(ValueError, match="closed file"):
-        try_raw_fd(Closed())
+        getattr(path_or_file_like, fd)(FileLike())
