@@ -11,6 +11,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check the crate
+        run: cargo fmt -- --check
+
+      # The example is a package of its own.
+      - name: Check the example
+        run: cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml -- --check
+
   test:
     name: test
     runs-on: ubuntu-latest
