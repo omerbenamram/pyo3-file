@@ -4,7 +4,7 @@ use pyo3::intern;
 use pyo3::{exceptions::PyTypeError, prelude::*};
 use std::borrow::Cow;
 
-use pyo3::types::{PyBytes, PyString};
+use pyo3::types::{PyBool, PyBytes, PyInt, PyString};
 #[cfg(feature = "experimental-inspect")]
 use pyo3::{type_hint_identifier, type_hint_subscript, type_hint_union};
 
@@ -64,6 +64,8 @@ impl PyFileLikeObject {
     /// Same as `PyFileLikeObject::new`, but validates that the underlying
     /// python object has a `read`, `write`, and `seek` methods in respect to parameters.
     /// Will return a `TypeError` if object does not have `read`, `seek`, `write` and `fileno` methods.
+    /// With `fileno`, the object must also have a file descriptor (Unix): the error is the one
+    /// its `fileno()` raises, as an `io.BytesIO`'s does.
     ///
     /// Prefer using [`py_with_requirements`][Self::py_with_requirements] if you already have a
     /// `Bound<PyAny>` object, as this method re-acquires the GIL internally.
@@ -127,6 +129,13 @@ impl PyFileLikeObject {
             return Err(PyTypeError::new_err(
                 "Object does not have a .fileno() method.",
             ));
+        }
+
+        // Having the method isn't having a descriptor: an `io.BytesIO` has a `fileno()` that
+        // raises.
+        #[cfg(unix)]
+        if fileno {
+            Self::fileno(&obj)?;
         }
 
         PyFileLikeObject::py_new(obj)
@@ -298,14 +307,58 @@ impl PyFileLikeObject {
         res.extract().map_err(io::Error::from)
     }
 
+    /// The object's file descriptor, as its `fileno()` gives it.
+    ///
+    /// Many file-like objects have none: an `io.BytesIO` or an `io.StringIO` raises
+    /// `io.UnsupportedOperation` from `fileno()`, and a plain object with a `read()` may not
+    /// have the method at all. The error is the exception Python raised, or an
+    /// [`io::ErrorKind::InvalidData`] error for a `fileno()` that returns anything but a
+    /// descriptor (an `int` from 0 that fits a [`RawFd`]).
+    ///
+    /// The descriptor is still the Python object's: it is closed when the object is, and must
+    /// not be closed from Rust.
+    #[cfg(unix)]
+    pub fn py_try_as_raw_fd(&self, py: Python<'_>) -> io::Result<RawFd> {
+        Self::fileno(self.inner.bind(py))
+    }
+
+    /// The descriptor `obj.fileno()` returns.
+    #[cfg(unix)]
+    fn fileno(obj: &Bound<PyAny>) -> io::Result<RawFd> {
+        let fd = obj.call_method0(consts::fileno(obj.py()))?;
+        // What it returned, when that isn't a descriptor: its type, or its value for an `int`
+        // (`True` is one to Python, and not a descriptor anyone meant).
+        let returned = if fd.is_instance_of::<PyBool>() || !fd.is_instance_of::<PyInt>() {
+            fd.get_type().to_string()
+        } else {
+            match fd.extract::<RawFd>() {
+                Ok(fd) if fd >= 0 => return Ok(fd),
+                _ => fd.to_string(),
+            }
+        };
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("fileno() returned {}, expected a file descriptor", returned),
+        ))
+    }
+
+    /// Same as [`py_try_as_raw_fd`][Self::py_try_as_raw_fd], for a caller that isn't attached
+    /// to the interpreter.
+    #[cfg(unix)]
+    pub fn try_as_raw_fd(&self) -> io::Result<RawFd> {
+        Python::attach(|py| self.py_try_as_raw_fd(py))
+    }
+
+    /// The object's file descriptor.
+    ///
+    /// # Panics
+    ///
+    /// If the object has none: see the [`AsRawFd`] implementation. Use
+    /// [`py_try_as_raw_fd`][Self::py_try_as_raw_fd] for an object that may not have one.
     #[cfg(unix)]
     pub fn py_as_raw_fd(&self, py: Python<'_>) -> RawFd {
-        let inner = self.inner.bind(py);
-        let fd = inner
-            .call_method0(consts::fileno(py))
-            .expect("Object does not have a fileno() method.");
-
-        fd.extract().expect("File descriptor is not an integer.")
+        self.py_try_as_raw_fd(py)
+            .unwrap_or_else(|err| panic!("the object has no file descriptor: {}", err))
     }
 
     pub fn py_clone(&self, py: Python<'_>) -> PyFileLikeObject {
@@ -368,6 +421,16 @@ impl Seek for &PyFileLikeObject {
     }
 }
 
+/// The descriptor that the object's `fileno()` returns.
+///
+/// # Panics
+///
+/// [`AsRawFd::as_raw_fd`] can't fail, and not every file-like object has a descriptor: an
+/// `io.BytesIO` raises from `fileno()`. For such an object this panics, with Python's reason.
+/// To rule that out, make the object with
+/// [`with_requirements`][PyFileLikeObject::with_requirements] and `fileno` set, which fails
+/// for an object without a descriptor, or call
+/// [`try_as_raw_fd`][PyFileLikeObject::try_as_raw_fd], which returns the error.
 #[cfg(unix)]
 impl AsRawFd for PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {
@@ -375,6 +438,7 @@ impl AsRawFd for PyFileLikeObject {
     }
 }
 
+/// As for [`PyFileLikeObject`]: panics when the object has no file descriptor.
 #[cfg(unix)]
 impl AsRawFd for &PyFileLikeObject {
     fn as_raw_fd(&self) -> RawFd {

@@ -96,6 +96,23 @@ fn read_exact_in_steps(file_like: Bound<PyAny>, len: usize, step: usize) -> PyRe
     Ok(data)
 }
 
+#[cfg(unix)]
+#[pyfunction]
+/// The file descriptor of a file-like that must have one, as `AsRawFd` gives it.
+fn raw_fd(file_like: Bound<PyAny>) -> PyResult<i32> {
+    use std::os::fd::AsRawFd;
+
+    let file = PyFileLikeObject::py_with_requirements(file_like, false, false, false, true)?;
+    Ok(file.as_raw_fd())
+}
+
+#[cfg(unix)]
+#[pyfunction]
+/// The file descriptor of a file-like, or the error that says why it has none.
+fn try_raw_fd(file_like: Bound<PyAny>) -> PyResult<i32> {
+    Ok(PyFileLikeObject::py_new(file_like)?.try_as_raw_fd()?)
+}
+
 #[pymodule]
 fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(accepts_path_or_file_like_read))?;
@@ -103,6 +120,10 @@ fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(name_of_file_like))?;
     m.add_wrapped(wrap_pyfunction!(write_buffered))?;
     m.add_wrapped(wrap_pyfunction!(read_exact_in_steps))?;
+    #[cfg(unix)]
+    m.add_wrapped(wrap_pyfunction!(raw_fd))?;
+    #[cfg(unix)]
+    m.add_wrapped(wrap_pyfunction!(try_raw_fd))?;
 
     Ok(())
 }
