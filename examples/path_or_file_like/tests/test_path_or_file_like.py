@@ -160,15 +160,17 @@ unix_only = pytest.mark.skipif(
     not hasattr(path_or_file_like, "raw_fd"), reason="file descriptors are Unix only"
 )
 # `raw_fd` requires a descriptor when it wraps the object; `try_raw_fd` asks for it later.
-fd_function = pytest.mark.parametrize("fd", ["raw_fd", "try_raw_fd"])
+fd_function = pytest.mark.parametrize(
+    "fd", [getattr(path_or_file_like, name, None) for name in ("raw_fd", "try_raw_fd")]
+)
 
 
 @unix_only
 @fd_function
-def test_it_gives_the_descriptor_of_a_real_file(small_sample, fd):
-    for mode in ["rb", "rt"]:
-        with open(small_sample, mode) as o:
-            assert getattr(path_or_file_like, fd)(o) == o.fileno()
+@pytest.mark.parametrize("mode", ["rb", "rt"])
+def test_it_gives_the_descriptor_of_a_real_file(small_sample, fd, mode):
+    with open(small_sample, mode) as o:
+        assert fd(o) == o.fileno()
 
 
 @unix_only
@@ -177,7 +179,7 @@ def test_it_gives_the_descriptor_of_a_real_file(small_sample, fd):
 def test_an_object_without_a_descriptor_is_an_error(make, fd):
     # Asking such an object for its descriptor used to panic.
     with pytest.raises(io.UnsupportedOperation, match="fileno"):
-        getattr(path_or_file_like, fd)(make())
+        fd(make())
 
 
 @unix_only
@@ -186,7 +188,7 @@ def test_a_closed_file_is_an_error(small_sample, fd):
     o = open(small_sample, "rb")
     o.close()
     with pytest.raises(ValueError, match="closed file"):
-        getattr(path_or_file_like, fd)(o)
+        fd(o)
 
 
 @unix_only
@@ -194,12 +196,13 @@ def test_a_closed_file_is_an_error(small_sample, fd):
     "fd, error", [("raw_fd", TypeError), ("try_raw_fd", AttributeError)]
 )
 def test_an_object_without_fileno_is_an_error(fd, error):
+    fd = getattr(path_or_file_like, fd)
     class FileLike:
         def read(self, _size):
             return b""
 
     with pytest.raises(error, match="fileno"):
-        getattr(path_or_file_like, fd)(FileLike())
+        fd(FileLike())
 
 
 @unix_only
@@ -211,4 +214,4 @@ def test_a_fileno_that_is_not_a_descriptor_is_an_error(value, fd):
             return value
 
     with pytest.raises(OSError, match=r"fileno\(\) returned .*, expected a file descriptor"):
-        getattr(path_or_file_like, fd)(FileLike())
+        fd(FileLike())

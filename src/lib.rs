@@ -131,17 +131,14 @@ impl PyFileLikeObject {
             ));
         }
 
-        let py = obj.py();
-        let file = PyFileLikeObject::py_new(obj)?;
         // Having the method isn't having a descriptor: an `io.BytesIO` has a `fileno()` that
         // raises.
         #[cfg(unix)]
         if fileno {
-            file.py_try_as_raw_fd(py)?;
+            Self::fileno(&obj)?;
         }
-        #[cfg(not(unix))]
-        let _ = py;
-        Ok(file)
+
+        PyFileLikeObject::py_new(obj)
     }
 
     /// Reads into `buf` with the object's `read()`.
@@ -322,25 +319,27 @@ impl PyFileLikeObject {
     /// not be closed from Rust.
     #[cfg(unix)]
     pub fn py_try_as_raw_fd(&self, py: Python<'_>) -> io::Result<RawFd> {
-        let fd = self.inner.bind(py).call_method0(consts::fileno(py))?;
-        // `True` is an `int` to Python, and not a descriptor anyone meant.
-        if !fd.is_instance_of::<PyInt>() || fd.is_instance_of::<PyBool>() {
-            let ty = fd
-                .get_type()
-                .name()
-                .map_or_else(|_| "an object".to_string(), |ty| ty.to_string());
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("fileno() returned {ty}, expected a file descriptor"),
-            ));
-        }
-        match fd.extract::<RawFd>() {
-            Ok(fd) if fd >= 0 => Ok(fd),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("fileno() returned {fd}, expected a file descriptor"),
-            )),
-        }
+        Self::fileno(self.inner.bind(py))
+    }
+
+    /// The descriptor `obj.fileno()` returns.
+    #[cfg(unix)]
+    fn fileno(obj: &Bound<PyAny>) -> io::Result<RawFd> {
+        let fd = obj.call_method0(consts::fileno(obj.py()))?;
+        // What it returned, when that isn't a descriptor: its type, or its value for an `int`
+        // (`True` is one to Python, and not a descriptor anyone meant).
+        let returned = if fd.is_instance_of::<PyBool>() || !fd.is_instance_of::<PyInt>() {
+            fd.get_type().to_string()
+        } else {
+            match fd.extract::<RawFd>() {
+                Ok(fd) if fd >= 0 => return Ok(fd),
+                _ => fd.to_string(),
+            }
+        };
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("fileno() returned {}, expected a file descriptor", returned),
+        ))
     }
 
     /// Same as [`py_try_as_raw_fd`][Self::py_try_as_raw_fd], for a caller that isn't attached
