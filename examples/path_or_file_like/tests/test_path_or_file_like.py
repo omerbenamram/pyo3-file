@@ -153,3 +153,68 @@ def test_it_fails_when_read_returns_more_than_asked():
 
     with pytest.raises(OSError, match=r"read\(4\) returned 8 bytes"):
         read_exact_in_steps(FileLike(), 4, 4)
+
+
+
+def fd_functions():
+    """`raw_fd` and `try_raw_fd`, which the example only has on Unix."""
+    module = pytest.importorskip("path_or_file_like")
+    if not hasattr(module, "raw_fd"):
+        pytest.skip("file descriptors are Unix only")
+    return module.raw_fd, module.try_raw_fd
+
+
+def test_it_gives_the_descriptor_of_a_real_file(small_sample):
+    raw_fd, try_raw_fd = fd_functions()
+    with open(small_sample, "rb") as o:
+        assert raw_fd(o) == o.fileno()
+        assert try_raw_fd(o) == o.fileno()
+    with open(small_sample, "rt") as o:
+        assert raw_fd(o) == o.fileno()
+        assert try_raw_fd(o) == o.fileno()
+
+
+@pytest.mark.parametrize("file_like", [io.BytesIO(b"data"), io.StringIO("text")])
+def test_an_object_without_a_descriptor_is_minus_one_or_an_error(file_like):
+    raw_fd, try_raw_fd = fd_functions()
+    # It used to panic.
+    assert raw_fd(file_like) == -1
+    with pytest.raises(io.UnsupportedOperation, match="fileno"):
+        try_raw_fd(file_like)
+
+
+def test_an_object_without_fileno_is_minus_one_or_an_error():
+    raw_fd, try_raw_fd = fd_functions()
+
+    class FileLike:
+        def read(self, _size):
+            return b""
+
+    assert raw_fd(FileLike()) == -1
+    with pytest.raises(AttributeError, match="fileno"):
+        try_raw_fd(FileLike())
+
+
+@pytest.mark.parametrize("value", [-1, -7, 2**40, "3", None, 1.5])
+def test_a_fileno_that_is_not_a_descriptor_is_minus_one_or_an_error(value):
+    raw_fd, try_raw_fd = fd_functions()
+
+    class FileLike:
+        def fileno(self):
+            return value
+
+    assert raw_fd(FileLike()) == -1
+    with pytest.raises(OSError, match=r"fileno\(\) returned .*, expected a file descriptor"):
+        try_raw_fd(FileLike())
+
+
+def test_a_fileno_that_raises_is_minus_one_or_its_error():
+    raw_fd, try_raw_fd = fd_functions()
+
+    class Closed:
+        def fileno(self):
+            raise ValueError("I/O operation on closed file")
+
+    assert raw_fd(Closed()) == -1
+    with pytest.raises(ValueError, match="closed file"):
+        try_raw_fd(Closed())
