@@ -20,8 +20,8 @@ A deliberate blocker is different. Examples are a safety check that refuses a co
 
 Two kinds of action wait for Omer. Nothing else in this repository needs his approval.
 
-1. **Publishing a release.** A version published to crates.io or PyPI cannot be replaced or removed, only yanked. Open a `chore(release): X.Y.Z` pull request only when Omer asks for a release. Merge it only when he tells you to, because that merge tags the commit and publishes it. When he has told you, that is the go-ahead: merge it without asking again. `RELEASING.md` has the steps.
-2. **Speaking to other people on GitHub.** This covers closing an issue, commenting on an issue, and commenting on, merging or closing a pull request that you did not open. These speak to Omer's users in his name. Write the draft, show it to Omer, and post it when he agrees. A closing keyword in a pull request, such as `Fixes #12`, closes the issue at merge. For an issue that someone else opened, write `Refs #12` and draft the closing comment for Omer.
+1. **Publishing a release.** A version published to crates.io or PyPI cannot be replaced or removed, only yanked. A merge to `master` that changes `version` in `Cargo.toml` tags the commit and publishes it, whatever the pull request is called. So change `version` only in a `chore(release): X.Y.Z` pull request, open one only when Omer asks for a release, and merge it only when he tells you to. When he has told you, that is the go-ahead: merge it without asking again. `RELEASING.md` has the steps.
+2. **Speaking to other people on GitHub.** This covers closing an issue, commenting on an issue, and commenting on, merging or closing a pull request that you did not open. These speak to Omer's users in his name. GitHub shows Omer's account as the author of your pull requests too; yours come from a `claude/` branch and say in their description that Claude made them. Write the draft, show it to Omer, and post it when he agrees. A closing keyword in a pull request, such as `Fixes #12`, closes the issue at merge. For an issue that someone else opened, write `Refs #12` and draft the closing comment for Omer.
 
 Take every other step without asking. These are the common ones:
 
@@ -78,19 +78,19 @@ Use plain words and full sentences: short ones, one idea each, in the active voi
 
 ### Checks
 
-`.github/workflows/ci.yml` runs these on every pull request and on `master`. Before you push, run the ones that match what you changed. A change to documentation alone needs none.
+`.github/workflows/ci.yml` runs these on every pull request and on `master`. Before you push, run the ones that match what you changed. A change to these instruction files alone needs none.
 
-- `cargo test`. It also runs the examples in `README.md` as doc tests.
+- `cargo test`. It also runs the first Rust example in `README.md` as a doc test. Nothing runs the other examples there.
 - `cargo test --features experimental-inspect`
-- The example: `maturin build -m examples/path_or_file_like/Cargo.toml -o wheels`, then `pip install wheels/*.whl pytest`, then `pytest` in `examples/path_or_file_like`.
+- The example: `maturin build -m examples/path_or_file_like/Cargo.toml -o target/wheels`, then `pip install --force-reinstall target/wheels/*.whl pytest`, then `pytest` in `examples/path_or_file_like`. The wheel always has the same version, so without `--force-reinstall` pip keeps the old build.
 
-CI does not run rustfmt or clippy here; the tree is rustfmt-clean, so keep it that way with `cargo fmt`.
+CI does not run rustfmt or clippy here. The tree is rustfmt-clean, so keep it that way with `cargo fmt`, and with `cargo fmt --manifest-path examples/path_or_file_like/Cargo.toml` for the example, which is a separate package.
 
 ### Code rules
 
-- A Python object can raise from any method, return the wrong type, or return more or fewer bytes than asked. None of that may make the crate panic or corrupt data: return an `io::Error`.
+- A Python object can raise from any method, return the wrong type, or return more or fewer bytes than asked. None of that may make the crate panic or corrupt data: return an `io::Error`. The one deliberate panic is in `as_raw_fd`, because `AsRawFd::as_raw_fd` cannot return an error. Its doc comment explains it, and `try_as_raw_fd` is the form that returns the error.
 - A new major version of PyO3 is a breaking change for users, so it bumps the minor version while the crate is on 0.x.
-- This repository has no changelog entries. The GitHub release notes are generated from the titles of the merged pull requests, so write each title for a user of the crate.
+- This repository keeps no changelog entries: `CHANGELOG.md` only points to the GitHub releases, so leave it as it is. The release notes are generated from the titles of the merged pull requests, so write each title for a user of the crate.
 
 ## Editing these instructions
 
