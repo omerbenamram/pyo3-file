@@ -1,29 +1,29 @@
-![crates.io](https://img.shields.io/crates/v/pyo3-file.svg)
+# pyo3-file
 
-# PyO3-File
+[![crates.io](https://img.shields.io/crates/v/pyo3-file.svg)](https://crates.io/crates/pyo3-file)
+[![docs.rs](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.rs/pyo3-file)
 
-This is a small utility library to facilitate working with python file-like objects with rust.
+`pyo3-file` lets Rust code read, write and seek a Python file-like object. `PyFileLikeObject` wraps any Python object with `read`, `write` or `seek` methods and implements `std::io::Read`, `Write` and `Seek` for it, so the object can go wherever a reader or a writer is taken.
+
+Use it when a [PyO3](https://pyo3.rs) extension should accept an open file, an `io.BytesIO` or a stream from a zip or a bucket, and not only a path.
 
 ## Example
 
-An example use case for this is when a file is opened in python, and needs to be passed to a rust library.
+A function that takes either a path, as a `str`, or a file-like object, so that both of these work from Python:
 
-We could support both by introspecting the `PyObject`, and pick the correct behavior.
-
-We would like this to work:
 ```python
 from path_or_file_like import accepts_path_or_file_like
 
 def main():
-    # should open `some_file.txt`.
+    # Opens `some_file.txt` itself.
     accepts_path_or_file_like("./some_file.txt")
 
-    # should read from the python handle.
+    # Reads from the Python file object.
     f = open('./some_file.txt')
     accepts_path_or_file_like(f)
 ```
 
-We could use `pyo3_file` to extend an existing a `pyo3` module.
+The Rust side tries the argument as a `str` path first, and wraps it in a `PyFileLikeObject` otherwise:
 
 ```rust
 use pyo3_file::PyFileLikeObject;
@@ -89,6 +89,14 @@ fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 # fn main() {}
 ```
 
+A larger extension of this kind, with tests, is in [`examples/path_or_file_like`](https://github.com/omerbenamram/pyo3-file/tree/master/examples/path_or_file_like).
+
+`py_with_requirements(object, read, write, seek, fileno)` checks, when the object is wrapped, that it has the methods you ask for. A missing `read`, `write` or `seek` is then a `TypeError` at the call, not an I/O error in the middle of a read. `flush` is not checked, and a `PyFileLikeObject` taken directly as a function argument is not checked at all.
+
+A Python object can raise from any method or return something unexpected. `Read`, `Write` and `Seek` return that as an `io::Error`, not a panic.
+
+On Unix, `try_as_raw_fd` gives the object's file descriptor. `AsRawFd::as_raw_fd` and `py_as_raw_fd` panic for an object without one, because they have no way to return an error.
+
 ## Type stubs
 
 The optional `experimental-inspect` feature turns on `pyo3/experimental-inspect`, so that a
@@ -99,8 +107,8 @@ The optional `experimental-inspect` feature turns on `pyo3/experimental-inspect`
 def accepts_file_like(f: _typeshed.SupportsRead[typing.Any] | _typeshed.SupportsWrite[typing.Any]) -> str: ...
 ```
 
-Because one `FromPyObject` impl is shared by every call site, the hint can only say "supports read
-*or* write" — which methods are actually required is a per-call-site decision made through
+One `FromPyObject` impl is shared by every call site, so the hint can only say "supports read
+*or* write". Which methods are required is decided at each call site, through
 `py_with_requirements`. A function that knows it only writes can narrow its own stub:
 
 ```rust,ignore
