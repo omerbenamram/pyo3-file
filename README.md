@@ -89,9 +89,13 @@ fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 # fn main() {}
 ```
 
-`py_with_requirements(object, read, write, seek, fileno)` checks when the object is wrapped that it has the `read`, `write`, `seek` and `fileno` methods you ask for. An object without one of the first three is then a `TypeError` at the call and not an I/O error in the middle of a read. It does not check `flush`, and a `PyFileLikeObject` taken directly as a function argument is not checked at all. A larger extension of this kind, with tests, is in [`examples/path_or_file_like`](https://github.com/omerbenamram/pyo3-file/tree/master/examples/path_or_file_like).
+A larger extension of this kind, with tests, is in [`examples/path_or_file_like`](https://github.com/omerbenamram/pyo3-file/tree/master/examples/path_or_file_like).
 
-A Python object can raise from any of its methods or return something unexpected. In `Read`, `Write` and `Seek` such a failure comes back as an `io::Error`, not a panic. On Unix the wrapper also gives the object's file descriptor. There, `AsRawFd::as_raw_fd` and `py_as_raw_fd` panic for an object without one, because they have no way to return an error: `try_as_raw_fd` is the form that does.
+`py_with_requirements(object, read, write, seek, fileno)` checks, when the object is wrapped, that it has the methods you ask for. A missing `read`, `write` or `seek` is then a `TypeError` at the call, not an I/O error in the middle of a read. `flush` is not checked, and a `PyFileLikeObject` taken directly as a function argument is not checked at all.
+
+A Python object can raise from any method or return something unexpected. `Read`, `Write` and `Seek` return that as an `io::Error`, not a panic.
+
+On Unix, `try_as_raw_fd` gives the object's file descriptor. `AsRawFd::as_raw_fd` and `py_as_raw_fd` panic for an object without one, because they have no way to return an error.
 
 ## Type stubs
 
