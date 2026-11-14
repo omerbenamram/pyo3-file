@@ -3,13 +3,13 @@
 [![crates.io](https://img.shields.io/crates/v/pyo3-file.svg)](https://crates.io/crates/pyo3-file)
 [![docs.rs](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.rs/pyo3-file)
 
-`pyo3-file` lets Rust code read, write and seek a Python file-like object. `PyFileLikeObject` wraps any Python object with `read`, `write` or `seek` methods and implements `std::io::Read`, `Write` and `Seek` for it, so the object can go wherever a `File` can.
+`pyo3-file` lets Rust code read, write and seek a Python file-like object. `PyFileLikeObject` wraps any Python object with `read`, `write` or `seek` methods and implements `std::io::Read`, `Write` and `Seek` for it, so the object can go wherever a reader or a writer is taken.
 
 Use it when a [PyO3](https://pyo3.rs) extension should accept an open file, an `io.BytesIO` or a stream from a zip or a bucket, and not only a path.
 
 ## Example
 
-A function that takes either a path or a file-like object, so that both of these work from Python:
+A function that takes either a path, as a `str`, or a file-like object, so that both of these work from Python:
 
 ```python
 from path_or_file_like import accepts_path_or_file_like
@@ -23,7 +23,7 @@ def main():
     accepts_path_or_file_like(f)
 ```
 
-The Rust side tries the argument as a path first, and wraps it in a `PyFileLikeObject` otherwise:
+The Rust side tries the argument as a `str` path first, and wraps it in a `PyFileLikeObject` otherwise:
 
 ```rust
 use pyo3_file::PyFileLikeObject;
@@ -89,9 +89,9 @@ fn path_or_file_like(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 # fn main() {}
 ```
 
-`py_with_requirements(object, read, write, seek, fileno)` checks when the object is wrapped that it has the methods you will need, so a wrong argument is a `TypeError` at the call and not an I/O error in the middle of a read. The complete extension, with its tests, is in [`examples/path_or_file_like`](examples/path_or_file_like).
+`py_with_requirements(object, read, write, seek, fileno)` checks when the object is wrapped that it has the `read`, `write`, `seek` and `fileno` methods you ask for. An object without one of the first three is then a `TypeError` at the call and not an I/O error in the middle of a read. It does not check `flush`, and a `PyFileLikeObject` taken directly as a function argument is not checked at all. A larger extension of this kind, with tests, is in [`examples/path_or_file_like`](https://github.com/omerbenamram/pyo3-file/tree/master/examples/path_or_file_like).
 
-A Python object can raise from any of its methods or return something unexpected. Every such failure comes back as an `io::Error`, not a panic. The one exception is `AsRawFd::as_raw_fd`, which has no way to return an error: `try_as_raw_fd` is the form that does.
+A Python object can raise from any of its methods or return something unexpected. In `Read`, `Write` and `Seek` such a failure comes back as an `io::Error`, not a panic. On Unix the wrapper also gives the object's file descriptor. There, `AsRawFd::as_raw_fd` and `py_as_raw_fd` panic for an object without one, because they have no way to return an error: `try_as_raw_fd` is the form that does.
 
 ## Type stubs
 
